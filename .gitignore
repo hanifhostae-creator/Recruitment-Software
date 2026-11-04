@@ -1,0 +1,6 @@
+# business data — never commit (back up data/rh.sqlite and uploads/ from the hosting)
+data/*
+!data/.htaccess
+uploads/*
+!uploads/.htaccess
+.DS_Store

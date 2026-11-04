@@ -1,0 +1,17 @@
+# RH Management — Apache settings for shared hosting
+Options -Indexes
+DirectoryIndex index.php
+<FilesMatch "\.(sqlite|sqlite3|db|log|md|json|lock|sh)$">
+  <IfModule mod_authz_core.c>
+    Require all denied
+  </IfModule>
+  <IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+  </IfModule>
+</FilesMatch>
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>

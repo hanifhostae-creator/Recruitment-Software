@@ -40,35 +40,28 @@ this same repo. Each session stays inside its own module.
   is finished and tested.
 - Never rewrite `main`. Never push another session's half-finished work.
 
-## File ownership (prevents merge conflicts)
+## Current status (v1.0 — full first build done)
 
-Each module owns its own files. A session edits only its own files plus the **registry
-file of its own module**. Shared core files are changed only by Session 1; other sessions
-ask for a change in their notes (`docs/requests.md`) instead of editing core.
+The complete system from the spec is built and tested (all modules, 3 portals, reports,
+WhatsApp webhook, double-entry accounting). The three sessions now **improve and extend**
+their module instead of starting from zero. Read `docs/core-api.md` before changing code.
+
+## Code layout & file ownership (prevents merge conflicts)
+
+Schema is **generated from entity definitions** (`ent()` in `inc/entity.php`): adding a field to a
+definition adds the column automatically (data-preserving `ALTER`), no SQL needed.
+Each module owns its own files. Shared core files are changed only by Session 1; other sessions
+write requests in `docs/requests.md`.
 
 | Owner | Files |
 |---|---|
-| Core (S1) | `inc/db.php`, `inc/functions.php`, `inc/auth.php`, `inc/layout.php`, `inc/registry.php`, `inc/schema/core.php`, `assets/app.css`, `assets/app.js`, `login.php`, `logout.php`, `index.php`, `mydash.php`, `admin.php`, `settings.php`, `staff.php`, `audit.php`, `search.php`, `tasks.php`, `notifications.php`, `reports.php`, `delete.php`, `file.php` (download handler), `data/.htaccess`, `uploads/.htaccess` |
-| Module 1 (S1) | `inc/modules/inside.php`, `inc/schema/inside.php`, `reception.php`, `candidates.php`, `candidate_register.php`, `deployment.php`, `inside.php`, `fees.php`, `recruitment.php`, `marketing.php`, `portal.php` |
-| Module 2 (S2) | `inc/modules/outside.php`, `inc/schema/outside.php`, `outside.php`, `outside_ops.php`, `client_portal.php`, `agent_portal.php`, `finance.php`, `accounting.php`, `invoices.php` |
-| Module 3 (S3) | `inc/modules/business.php`, `inc/schema/business.php`, `hrm.php`, `crm.php`, `erp.php`, `pos.php`, `projects.php`, `it.php`, `travel.php`, `paybook.php`, `whatsapp.php`, `webhook.php`, `messenger.php`, `calendar.php`, `meetings.php`, `cms.php`, `media.php`, `kb.php`, `support.php` |
+| Core (S1) | `inc/boot.php`, `inc/db.php`, `inc/functions.php` (money, journals, stages, audit, uploads, charts), `inc/auth.php`, `inc/entity.php` (generic list/form/detail/import/export engine), `inc/layout.php`, `inc/registry.php`, `inc/modules/core.php` (roles, demo users, options, tasks, documents, issues), `assets/app.css`, `assets/app.js`, `login.php`, `logout.php`, `index.php`, `mydash.php`, `search.php`, `notifications.php`, `reports.php`, `staff.php`, `admin.php`, `settings.php`, `audit.php`, `file.php`, `router.php`, `.htaccess` files |
+| Module 1 (S1) | `inc/modules/inside.php`, `reception.php`, `candidates.php`, `deployment.php`, `inside.php`, `fees.php`, `recruitment.php`, `marketing.php`, `portal.php`, `candidate_register.php` |
+| Module 2 (S2) | `inc/modules/outside.php`, `inc/modules/finance.php`, `outside.php`, `outside_ops.php`, `client_portal.php`, `agent_portal.php`, `finance.php`, `accounting.php`, `invoices.php` |
+| Module 3 (S3) | `inc/modules/business.php` (HRM, CRM, POS, ERP, Projects, IT, Travel, Paybook), `inc/modules/comms.php` (WhatsApp, meetings, email, CMS, KB, support, goals), `hrm.php`, `myhr.php`, `crm.php`, `pos.php`, `erp.php`, `projects.php`, `it.php`, `travel.php`, `paybook.php`, `whatsapp.php`, `webhook.php`, `messenger.php`, `calendar.php`, `meetings.php`, `email.php`, `cms.php`, `media.php`, `kb.php`, `support.php`, `goals.php` |
 
-Module-specific CSS/JS, if really needed, goes in `assets/<module>.css` / `assets/<module>.js`.
-
-### Module registry (how a module plugs in)
-
-`inc/registry.php` (core) loads every `inc/modules/*.php`. A module file registers, without
-touching core files:
-
-- its **schema** (`inc/schema/<module>.php` — `CREATE TABLE IF NOT EXISTS` + data-preserving
-  `ALTER` migrations, run on every boot, idempotent),
-- its **seed / demo data**,
-- its **menu items** (module key, label, icon, page, area),
-- its **module keys and action permissions** (used by Staff & Roles),
-- its **dashboard widgets** (live counters computed from records),
-- its **search providers** (for global search),
-- its **report sections** (for `reports.php`),
-- its **record-number prefixes** (e.g. `CAN-`, `IN-FILE-`, `RCT-`).
+A module page file is just `require 'inc/boot.php'; module_page('key');` — the module's tabs,
+widgets, search providers, report sections and demo seeders are registered in its `inc/modules/*.php`.
 
 ## Stack (fixed by the spec — Section 3)
 
@@ -78,7 +71,7 @@ touching core files:
 - Uploads in `uploads/` (CVs in `uploads/cv/`), downloaded only through `file.php`.
 - `data/` and `uploads/` blocked by `.htaccess` (direct `/data/rh.sqlite` → 403).
 - CSS + vanilla JS only; charts drawn with SVG/canvas, no chart library.
-- Local test: `php -S localhost:8000` from the repo root.
+- Local test: `php -S localhost:8000 router.php` from the repo root (router mimics .htaccess).
 
 ## Shared rules (spec Section 4 + 20 — every module, every screen)
 
