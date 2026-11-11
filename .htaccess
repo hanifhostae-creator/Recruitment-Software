@@ -1,5 +1,8 @@
 # RH Management — Apache settings for shared hosting
 Options -Indexes
+
+# Never serve version-control files (needed when the site is deployed with Git)
+RedirectMatch 404 /\.git
 DirectoryIndex index.php
 <FilesMatch "\.(sqlite|sqlite3|db|log|md|json|lock|sh)$">
   <IfModule mod_authz_core.c>
