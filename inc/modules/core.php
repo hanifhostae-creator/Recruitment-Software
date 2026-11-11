@@ -121,7 +121,7 @@ function default_roles()
     $std = ['add', 'edit', 'export'];
     return [
         ['Super Admin', 'All modules, Admin Control Centre and the full audit trail.', [], [], 1],
-        ['Reception', 'Registers walk-in candidates, assigns HR, runs queues and manual attendance.', ['reception', 'candidates', 'whatsapp'], ['reception' => ['add', 'edit'], 'candidates' => ['add', 'edit'], 'whatsapp' => ['add', 'edit']], 0],
+        ['Reception', 'Registers walk-in candidates, assigns HR, runs queues and manual attendance.', ['reception', 'candidates', 'whatsapp'], ['reception' => ['add', 'edit'], 'candidates' => ['add', 'edit', 'assign'], 'whatsapp' => ['add', 'edit']], 0],
         ['HR', 'Interviews, file decisions, inside files and HR productivity.', ['candidates', 'inside', 'fees', 'recruitment', 'hrm', 'reception', 'marketing'], ['candidates' => ['add', 'edit', 'approve', 'assign', 'export'], 'inside' => ['add', 'edit', 'approve', 'export'], 'fees' => ['add', 'edit'], 'recruitment' => ['add', 'edit', 'approve', 'export'], 'hrm' => ['add', 'edit', 'approve', 'export'], 'reception' => ['add', 'edit'], 'marketing' => []], 0],
         ['Deployment', 'Teams, interview locations, deployment payments, final outcomes and file closure.', ['deployment', 'candidates', 'inside'], ['deployment' => ['add', 'edit', 'assign', 'export'], 'candidates' => ['edit', 'assign'], 'inside' => []], 0],
         ['Finance', 'Ledgers, receipts, reconciliation, accounting and invoices.', ['finance', 'accounting', 'invoices', 'fees', 'inside', 'reports', 'paybook', 'travel'], ['finance' => ['add', 'edit', 'finance', 'approve', 'export'], 'accounting' => ['add', 'edit', 'finance', 'export'], 'invoices' => ['add', 'edit', 'finance', 'export'], 'fees' => ['add', 'edit', 'finance', 'export'], 'inside' => ['finance', 'export'], 'paybook' => ['finance'], 'travel' => ['finance']], 0],
@@ -134,7 +134,7 @@ function default_roles()
 
 seeder(function () {
     foreach ([['company_name', 'RH Business Solutions & Marketing Management'], ['company_short', 'RH Management'], ['currency', 'AED'], ['company_phone', '+971 555843001'],
-        ['company_email', 'info@rhmanagements.com'], ['company_address', 'Dubai, United Arab Emirates'], ['leave_entitlement', '30'], ['site_url', 'https://crm.rhmanagements.com']] as $s) set_setting($s[0], $s[1]);
+        ['company_email', 'info@rhmanagements.com'], ['company_address', 'Dubai, United Arab Emirates'], ['leave_entitlement', '30'], ['smtp_sec', 'ssl'], ['smtp_port', '465']] as $s) set_setting($s[0], $s[1]);
     foreach (default_roles() as $r) ins('roles', ['name' => $r[0], 'description' => $r[1], 'modules' => json_encode($r[2]), 'actions' => json_encode((object)$r[3]), 'is_super' => $r[4], 'created_at' => now()]);
     $role = function ($n) { return (int)val('SELECT id FROM roles WHERE name=?', [$n]); };
     $pw = password_hash('rh@123', PASSWORD_DEFAULT);
@@ -143,6 +143,25 @@ seeder(function () {
         ['ops', 'Omar Siddiqui', 'Outside Operations', 'ops@rhmanagements.com'], ['travel', 'Mariam Yusuf', 'Travel Team', 'travel@rhmanagements.com'], ['it', 'Zain Ali', 'IT / Digital', 'it@rhmanagements.com']] as $u)
         ins('users', ['username' => $u[0], 'name' => $u[1], 'email' => $u[3], 'role_id' => $role($u[2]), 'password_hash' => $pw, 'must_change' => 1, 'active' => 1, 'created_at' => now()]);
 }, 1);
+
+/** Notify every active user whose role name starts with $rolePrefix (for example Reception), except the person acting. */
+function notify_role($rolePrefix, $text, $link = '')
+{
+    foreach (rows('SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND r.name LIKE ?', [$rolePrefix . '%']) as $x)
+        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link);
+}
+/** One-time data upgrades for installs created by an earlier version (never removes anything). */
+function apply_upgrades()
+{
+    if (setting('upgrade_v11')) return;
+    $r = row("SELECT * FROM roles WHERE name='Reception'");
+    if ($r) {
+        $a = json_decode($r['actions'], true) ?: [];
+        $a['candidates'] = array_values(array_unique(array_merge($a['candidates'] ?? [], ['assign'])));
+        upd('roles', $r['id'], ['actions' => json_encode((object)$a)]);
+    }
+    set_setting('upgrade_v11', now());
+}
 
 /** Executive KPI report section (also used on the management dashboard). */
 function reports_kpi()

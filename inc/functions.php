@@ -97,7 +97,14 @@ function user_name($id)
     if (!isset($m[$id])) $m[$id] = (string)val('SELECT name FROM users WHERE id=?', [$id]);
     return $m[$id];
 }
-function staff_list() { return rows('SELECT id, name, username FROM users WHERE active=1 ORDER BY name'); }
+function staff_list($rolePrefix = null)
+{
+    if ($rolePrefix) {
+        $l = rows('SELECT u.id, u.name, u.username FROM users u JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND r.name LIKE ? ORDER BY u.name', [$rolePrefix . '%']);
+        if ($l) return $l;
+    }
+    return rows('SELECT id, name, username FROM users WHERE active=1 ORDER BY name');
+}
 
 /** Configurable dropdown values (Admin Control Centre > Custom options). */
 $GLOBALS['OPT_DEFAULTS'] = [];

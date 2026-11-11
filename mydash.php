@@ -33,7 +33,8 @@ $od = [];
 foreach (rows("SELECT * FROM inside_files WHERE status='Open' AND archived=0 AND (hr_owner=? OR deploy_owner=? OR reminder_owner=?) AND next_pay_date<?", [$u['id'], $u['id'], $u['id'], today()]) as $f) { $b = file_money($f)['balance']; if ($b > 0) $od[] = ['File balance overdue', e($f['ref_no'] . ' · ' . ent_title('candidates', $f['candidate_id'])), money($b), ent_url('inside_files', $f['id'])]; }
 foreach (rows("SELECT * FROM issues WHERE owner=? AND status IN ('Open','In Progress') AND due_date<? AND archived=0", [$u['id'], today()]) as $i) $od[] = ['Issue overdue', e($i['ref_no'] . ' ' . $i['subject']), e(dfmt($i['due_date'])), ent_url('issues', $i['id'])];
 foreach (rows("SELECT * FROM followups WHERE owner=? AND status='Open' AND due_date<? AND archived=0", [$u['id'], today()]) as $f) $od[] = ['Follow-up overdue', e($f['note']), e(dfmt($f['due_date'])), ent_url('followups', $f['id'])];
-foreach (rows("SELECT * FROM candidate_messages WHERE assigned_to=? AND status='Open' AND archived=0", [$u['id']]) as $m) $od[] = ['Candidate message waiting', e(ent_title('candidates', $m['candidate_id'])) . ': ' . e(mb_strimwidth((string)$m['body'], 0, 60, '…')), e(ago($m['created_at'])), ent_url('candidate_messages', $m['id'])];
+list($cw, $cp) = chat_scope(true);
+foreach (rows("SELECT c.id, c.full_name, COUNT(m.id) n FROM chat_messages m JOIN candidates c ON c.id=m.candidate_id WHERE m.sender_type='Candidate' AND m.read_at IS NULL AND m.archived=0 AND $cw GROUP BY c.id", $cp) as $m) $od[] = ['Chat waiting for your reply', e($m['full_name']) . ': ' . (int)$m['n'] . ' unread message(s)', '', 'chat.php?c=' . $m['id']];
 card_open(icon('alert', 17) . ' My overdue items <span class="count">' . count($od) . '</span>');
 echo simple_table(['Type', 'Item', ''], array_map(function ($x) { return ['<b>' . e($x[0]) . '</b>', $x[1], $x[2]]; }, $od), 'Nothing overdue.', array_column($od, 3));
 card_close();

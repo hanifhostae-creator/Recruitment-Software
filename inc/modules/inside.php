@@ -27,7 +27,7 @@ ent('candidates', ['label' => 'Candidates', 'prefix' => 'CAN', 'title' => 'full_
         'skills' => ['Skills', 'textarea'],
         'preferred_positions' => ['Preferred positions', 'text'],
         'cv_file' => ['CV', 'file', 'req_new', 'dir' => 'cv'],
-        'hr_officer' => ['Assign to HR (optional)', 'user', 'help' => 'Choosing an HR officer moves the candidate to HR Assigned.'],
+        'hr_officer' => ['Assign to HR (optional)', 'user', 'role' => 'HR', 'help' => 'Choosing an HR officer moves the candidate to HR Assigned and rings a notification on their screen.'],
         'stage' => ['Stage', 'enum:' . implode('|', CAND_STAGES), 'hide'],
         'interview_status' => ['Interview status', 'enum:Pending|Selected|Rejected|On Hold', 'hide'],
         'interview_notes' => ['Interviewer notes', 'textarea', 'hide'],
@@ -285,13 +285,7 @@ function candidate_portal_login($cid, $renew = false)
     $l = row('SELECT * FROM candidate_logins WHERE candidate_id=?', [$cid]);
     return portal_base_url() . 'portal.php?register=' . $l['token'];
 }
-function portal_base_url()
-{
-    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-    $host = $_SERVER['HTTP_HOST'] ?? parse_url(setting('site_url', 'http://localhost'), PHP_URL_HOST);
-    $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
-    return ($https ? 'https' : 'http') . '://' . $host . $dir . '/';
-}
+function portal_base_url() { return app_url(); }
 
 /** Candidate journey box (detail page and Reports). */
 function candidate_journey($c)
@@ -322,7 +316,7 @@ function candidate_overview($c)
 {
     $f = candidate_file($c['id']);
     if ($c['stage'] === 'Closed' && $f) echo '<div class="banner">' . icon('lock', 20) . ' This file is closed (' . e($f['close_reason']) . ' · ' . e(dtfmt($f['closed_at'])) . '). It cannot advance further.</div>';
-    card_open(icon('activity', 17) . ' Candidate journey', $c['cv_file'] ? file_link($c['cv_file'], 'Download CV') : '<span class="badge b-bad">No CV</span>');
+    card_open(icon('activity', 17) . ' Candidate journey', ($c['cv_file'] ? file_link($c['cv_file'], 'Download CV') : '<span class="badge b-bad">No CV</span>') . (function_exists('chat_participants') && chat_participants($c['id']) && chat_can($c['id']) ? ' <a class="btn ghost sm" href="chat.php?c=' . (int)$c['id'] . '">' . icon('chat', 14) . ' Private chat</a>' : ''));
     candidate_journey($c);
     card_close();
 }
@@ -340,10 +334,6 @@ function candidate_panels($c)
         payments_table(payments_for('inside_files', $f['id']), false);
         card_close();
     }
-    $msgs = rows('SELECT * FROM candidate_messages WHERE candidate_id=? AND archived=0 ORDER BY id DESC LIMIT 20', [$c['id']]);
-    card_open(icon('message', 17) . ' Messages, issues &amp; help requests <span class="count">' . count($msgs) . '</span>');
-    echo simple_table(['When', 'Type', 'Direction', 'Message', 'Assigned', 'Status'], array_map(function ($m) { return [e(dtfmt($m['created_at'])), e($m['kind']), e($m['direction']), e(mb_strimwidth((string)$m['body'], 0, 90, '…')) . ($m['file'] ? ' ' . file_link($m['file'], 'File') : ''), e(user_name($m['assigned_to'])), badge($m['status'])]; }, $msgs), 'No messages yet.', array_map(function ($m) { return ent_url('candidate_messages', $m['id']); }, $msgs));
-    card_close();
 }
 
 /** Inside file summary card. */
@@ -448,6 +438,7 @@ function candidate_actions()
                 upd('candidates', $r['id'], ['interview_status' => $st, 'interview_notes' => $notes, 'interviewed_at' => now(), 'hr_officer' => $r['hr_officer'] ?: me()['id'], 'updated_at' => now()]);
                 audit('interview', 'candidates', $r['id'], ['interview_status' => $r['interview_status']], ['interview_status' => $st]);
                 if (p('attendance') === 'Attended') stage_advance('candidates', $r['id'], 'Interviewed', 'Interview: ' . $st);
+                if ($st === 'Selected' && p('attendance') === 'Attended') return ['msg' => 'Interview recorded: Selected. Now confirm the file: choose the fee plan and enter the advance paid today.', 'go' => ent_url('candidates', $r['id']) . '&act=file'];
                 return ['msg' => 'Interview recorded: ' . $st . '.'];
             }],
         'file' => ['label' => 'File decision', 'icon' => 'folder', 'perm' => 'approve', 'show' => function ($r) { return $r['stage'] === 'Interviewed' && !candidate_file($r['id']); },
@@ -477,13 +468,15 @@ function candidate_actions()
                 $adv = p('advance') !== '' ? (float)p('advance') : (float)$plan['advance'];
                 $res = create_inside_file($r['id'], $plan['id'], $total, $adv, ['pay_method' => p('pay_method'), 'next_pay_date' => p('next_pay_date') ?: null]);
                 if (is_string($res)) return $res;
-                return ['msg' => 'Inside file opened (' . val('SELECT ref_no FROM inside_files WHERE id=?', [$res]) . '). The candidate moves to Deployment.'];
+                $ref = val('SELECT ref_no FROM inside_files WHERE id=?', [$res]);
+                notify_role('Reception', 'File confirmed by HR for ' . $r['full_name'] . ' (' . $ref . ') - ready to assign to Deployment', 'reception.php?t=ready');
+                return ['msg' => 'File ' . $ref . ' opened and Reception has been notified. You can assign the Deployment team now below, or leave it to Reception.', 'go' => ent_url('candidates', $r['id']) . '&act=deploy'];
             }],
         'deploy' => ['label' => 'Deploy', 'icon' => 'send', 'perm' => 'assign', 'show' => function ($r) { return in_array($r['stage'], ['File Opened', 'In Deployment'], true); },
             'form' => function ($r) use ($userSel) {
                 echo '<div class="grid-form"><div class="fld"><label>Deployment team</label><select name="team_id"><option value="">— None —</option>';
                 foreach (rows('SELECT * FROM deployment_teams WHERE archived=0 ORDER BY name') as $t) echo '<option value="' . $t['id'] . '"' . ($r['team_id'] == $t['id'] ? ' selected' : '') . '>' . e($t['name']) . '</option>';
-                echo '</select></div><div class="fld"><label>Deployment officer</label>' . $userSel('deploy_officer', $r['deploy_officer'], false) . '</div></div><p class="muted small">Assigning creates the candidate\'s portal login and registration link.</p><div class="form-actions"><button class="btn">Assign to Deployment</button></div>';
+                echo '</select></div><div class="fld"><label>Deployment officer</label>' . deploy_select('deploy_officer', $r['deploy_officer']) . '</div></div><p class="muted small">Assigning opens the private chat, creates the candidate\'s portal login and emails the registration link to the candidate.</p><div class="form-actions"><button class="btn">Assign to Deployment</button></div>';
             },
             'do' => function ($r) {
                 $team = (int)p('team_id') ?: null;
@@ -496,8 +489,9 @@ function candidate_actions()
                 audit('deploy', 'candidates', $r['id'], ['team_id' => $r['team_id'], 'deploy_officer' => $r['deploy_officer']], ['team_id' => $team, 'deploy_officer' => $off]);
                 stage_advance('candidates', $r['id'], 'In Deployment', 'Assigned to deployment');
                 $link = candidate_portal_login($r['id']);
-                if ($off) notify($off, 'Candidate assigned to you for deployment: ' . $r['full_name'], ent_url('candidates', $r['id']));
-                return ['msg' => 'Assigned to Deployment. Candidate portal login created. Registration link (valid 7 days): <a href="' . e($link) . '">' . e($link) . '</a>' . (!$r['email'] ? ' — note: add the candidate\'s email so it can be the portal username.' : '')];
+                foreach (chat_participants($r['id']) as $pid) if ((int)$pid !== (int)me()['id']) notify($pid, 'Candidate assigned to your team: ' . $r['full_name'], ent_url('candidates', $r['id']));
+                $mail = candidate_welcome_email($r['id'], $link);
+                return ['msg' => 'Assigned to Deployment. ' . $mail . ' Registration link (valid 7 days): <a href="' . e($link) . '">' . e($link) . '</a>'];
             }],
         'location' => ['label' => 'Location', 'icon' => 'map-pin', 'perm' => 'assign', 'show' => function ($r) { return $r['stage'] === 'In Deployment' && (!$r['final_outcome'] || $r['final_outcome'] === 'Rescheduled'); },
             'form' => function ($r) {
@@ -584,10 +578,7 @@ function candidate_actions()
                 } else echo '<p>' . ($l ? 'The registration link has expired.' : 'No portal login yet.') . '</p>';
                 echo '<div class="form-actions"><button class="btn">' . icon('refresh', 15) . ' ' . ($l ? 'Issue a new link (7 days)' : 'Create portal login') . '</button></div>';
             },
-            'do' => function ($r) { $url = candidate_portal_login($r['id'], true); return ['msg' => 'New registration link (valid 7 days): <a href="' . e($url) . '">' . e($url) . '</a>', 'go' => ent_url('candidates', $r['id']) . '&act=reglink']; }],
-        'message' => ['label' => 'Message', 'icon' => 'message', 'perm' => 'edit', 'show' => $open,
-            'form' => function ($r) { echo '<div class="fld"><label>Message to the candidate (shown in their portal) *</label><textarea name="body" required rows="3"></textarea></div><div class="form-actions"><button class="btn">' . icon('send', 15) . ' Send</button></div>'; },
-            'do' => function ($r) { if (!p('body')) return 'Write a message.'; ins('candidate_messages', ['candidate_id' => $r['id'], 'kind' => 'Message', 'direction' => 'To candidate', 'body' => p('body'), 'assigned_to' => me()['id'], 'status' => 'Answered', 'created_by' => me()['id'], 'created_at' => now(), 'archived' => 0]); return ['msg' => 'Message sent to the candidate portal.']; }],
+            'do' => function ($r) { $url = candidate_portal_login($r['id'], true); $mail = candidate_welcome_email($r['id'], $url); return ['msg' => $mail . ' New registration link (valid 7 days): <a href="' . e($url) . '">' . e($url) . '</a>', 'go' => ent_url('candidates', $r['id']) . '&act=reglink']; }],
     ];
 }
 
@@ -607,6 +598,66 @@ function candidate_queue_table(array $list, $empty = 'Nobody in this queue.')
     return simple_table(['No.', 'Candidate', 'Stage', 'Interview', 'File', 'Paid', 'Remaining', 'Next pay date', 'HR'], $data, $empty, $links);
 }
 
+/** HR officers (role name starting with HR) and Deployment staff (roles that have the Deployment module). */
+function hr_staff() { return staff_list('HR'); }
+function deploy_staff()
+{
+    $l = rows("SELECT u.id, u.name FROM users u JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND (r.modules LIKE '%\"deployment\"%') ORDER BY u.name");
+    return $l ?: staff_list();
+}
+function deploy_select($name, $v = null)
+{
+    $h = '<select name="' . e($name) . '"><option value="">— Select —</option>';
+    foreach (deploy_staff() as $s) $h .= '<option value="' . $s['id'] . '"' . ((string)$v === (string)$s['id'] ? ' selected' : '') . '>' . e($s['name']) . '</option>';
+    return $h . '</select>';
+}
+/** Email the candidate the portal registration link. Returns a sentence for the staff screen. */
+function candidate_welcome_email($cid, $link)
+{
+    $c = row('SELECT * FROM candidates WHERE id=?', [$cid]);
+    $f = candidate_file($cid);
+    if (!$c || !$c['email']) return 'No email was sent because the candidate has no email address on file (add it, then use "Registration link").';
+    $body = 'Dear ' . $c['full_name'] . ",\n\nWelcome to RH Business Solutions & Marketing Management. " . ($f ? 'Your file ' . $f['ref_no'] . ' has been passed to our deployment team' : 'Your registration is complete') . ", and your personal candidate portal is ready.\n\n"
+        . "In your portal you can follow your progress, see your interview locations and confirm the result of each interview, check your payments, and chat privately with your deployment team.\n\n"
+        . 'To activate it, press the button below and choose your password. Your username will be your email address (' . $c['email'] . '). The link is valid for 7 days.';
+    $ok = send_email($c['email'], 'Your RH Management candidate portal is ready', $body, 'Candidate registration link', ['button' => ['Activate my portal', $link], 'sensitive' => true]);
+    return $ok ? 'The registration email was sent to ' . e($c['email']) . '.' : 'The email to ' . e($c['email']) . ' could not be sent (' . e($GLOBALS['mail_error'] ?? 'unknown error') . '); share the link below with the candidate.';
+}
+/** Reception queue with an inline "assign" form on each row (HR officer, or Deployment team / officer). */
+function reception_assign_table(array $list, $kind, $empty)
+{
+    $can = $kind === 'hr' ? can('candidates', 'edit') : can('candidates', 'assign');
+    $hr = hr_staff();
+    $teams = rows('SELECT id, name FROM deployment_teams WHERE archived=0 ORDER BY name');
+    $dp = deploy_staff();
+    $data = [];
+    $links = [];
+    foreach ($list as $c) {
+        $f = candidate_file($c['id']);
+        $m = file_money($f);
+        $form = '<span class="muted small">Your role cannot assign</span>';
+        if ($can) {
+            $form = '<form method="post" class="inline-form" action="' . e('candidates.php?t=all&a=act&id=' . $c['id'] . '&act=' . $kind) . '">' . csrf_field() . '<input type="hidden" name="_back" value="' . e('reception.php' . ($kind === 'deploy' ? '?t=ready' : '')) . '">';
+            if ($kind === 'hr') {
+                $form .= '<select name="hr_officer" required aria-label="HR officer"><option value="">Choose HR officer…</option>';
+                foreach ($hr as $s) $form .= '<option value="' . $s['id'] . '">' . e($s['name']) . '</option>';
+                $form .= '</select>';
+            } else {
+                $form .= '<select name="team_id" aria-label="Deployment team"><option value="">Team (optional)</option>';
+                foreach ($teams as $t) $form .= '<option value="' . $t['id'] . '">' . e($t['name']) . '</option>';
+                $form .= '</select><select name="deploy_officer" aria-label="Deployment officer"><option value="">Officer…</option>';
+                foreach ($dp as $s) $form .= '<option value="' . $s['id'] . '">' . e($s['name']) . '</option>';
+                $form .= '</select>';
+            }
+            $form .= '<button class="btn sm">' . icon('send', 13) . ' Assign</button></form>';
+        }
+        $data[] = ['<b class="ref">' . e($c['ref_no']) . '</b>', '<b>' . e($c['full_name']) . '</b><br><small class="muted">' . e($c['phone']) . ' · ' . e($c['applied_position']) . '</small>', badge($c['interview_status'] ?: 'Not interviewed'),
+            $f ? '<small class="ref">' . e($f['ref_no']) . '</small>' : '<span class="muted">No file</span>', '<span class="num">' . money($m['paid']) . '</span>', '<span class="num"' . ($m['balance'] > 0 ? ' style="color:var(--bad);font-weight:700"' : '') . '>' . money(max(0, $m['balance'])) . '</span>', $m['next'] ? e(dfmt($m['next'])) : '<span class="muted">—</span>', $form];
+        $links[] = ent_url('candidates', $c['id']);
+    }
+    return simple_table(['No.', 'Candidate', 'Interview', 'File', 'Paid', 'Remaining', 'Next pay date', $kind === 'hr' ? 'Assign to HR' : 'Assign to Deployment'], $data, $empty, $links);
+}
+
 // ---------------------------------------------------------------- module screens
 
 mod('reception', ['label' => 'Reception', 'icon' => 'home', 'area' => 'Inside Hiring', 'order' => 1, 'desc' => 'Today\'s entries, HR-assign and ready-for-deployment queues, and staff attendance.',
@@ -618,15 +669,20 @@ mod('reception', ['label' => 'Reception', 'icon' => 'home', 'area' => 'Inside Hi
         echo candidate_queue_table(rows("SELECT * FROM candidates WHERE archived=0 AND date(created_at)=? ORDER BY id DESC", [today()]), 'No candidates registered today.');
         card_close();
         card_open(icon('user', 17) . ' HR-assign queue (waiting for an HR officer)');
-        echo candidate_queue_table(rows("SELECT * FROM candidates WHERE archived=0 AND stage='New' ORDER BY id"), 'Everyone has an HR officer.');
+        echo reception_assign_table(rows("SELECT * FROM candidates WHERE archived=0 AND stage='New' ORDER BY id"), 'hr', 'Everyone has an HR officer.');
         card_close();
         card_open(icon('clipboard', 17) . ' With HR (assigned / interviewed)');
         echo candidate_queue_table(rows("SELECT * FROM candidates WHERE archived=0 AND stage IN ('HR Assigned','Interviewed') ORDER BY id"), 'Nobody waiting with HR.');
         card_close();
         card_open(icon('send', 17) . ' Ready for deployment (file opened)');
-        echo candidate_queue_table(rows("SELECT * FROM candidates WHERE archived=0 AND stage='File Opened' ORDER BY id"), 'No files waiting for deployment.');
+        echo reception_assign_table(rows("SELECT * FROM candidates WHERE archived=0 AND stage='File Opened' ORDER BY id"), 'deploy', 'No files waiting for deployment.');
         card_close();
         echo '</div></div>';
+    }], 'ready' => ['label' => 'Ready for deployment', 'fn' => function ($base, $mod) {
+        $list = rows("SELECT * FROM candidates WHERE archived=0 AND stage='File Opened' ORDER BY id");
+        card_open(icon('send', 17) . ' Ready for deployment <span class="count">' . count($list) . '</span>', '<span class="muted small">HR has confirmed these files. Pick the deployment team or officer and press Assign.</span>');
+        echo reception_assign_table($list, 'deploy', 'Nothing waiting. New confirmed files appear here with a notification.');
+        card_close();
     }], 'attendance' => ['label' => 'Attendance', 'fn' => function ($base, $mod) {
         attendance_box();
         card_open(icon('users', 17) . ' Manual attendance box · ' . date('l d M Y'), '<span class="muted small">Mark staff who did not check in themselves</span>');
@@ -647,7 +703,7 @@ mod('reception', ['label' => 'Reception', 'icon' => 'home', 'area' => 'Inside Hi
     }]]]);
 
 mod('candidates', ['label' => 'Candidates', 'icon' => 'users', 'area' => 'Inside Hiring', 'order' => 2, 'desc' => 'Candidate master — one record per person (CAN- number), full journey, documents and messages.',
-    'tabs' => ['all' => ['ent' => 'candidates', 'label' => 'Candidates', 'noimport' => false], 'documents' => 'documents', 'messages' => 'candidate_messages', 'issues' => ['label' => 'Issues', 'ent' => 'issues', 'nohome' => true, 'scope' => function () { return ["party IN ('Candidate','Internal')", []]; }]]]);
+    'tabs' => ['all' => ['ent' => 'candidates', 'label' => 'Candidates', 'noimport' => false], 'documents' => 'documents', 'issues' => ['label' => 'Issues', 'ent' => 'issues', 'nohome' => true, 'scope' => function () { return ["party IN ('Candidate','Internal')", []]; }]]]);
 
 mod('deployment', ['label' => 'Deployment', 'icon' => 'send', 'area' => 'Inside Hiring', 'order' => 3, 'desc' => 'My Candidates, teams, interview locations, deployment payments, final outcomes and file closure.',
     'tabs' => [
@@ -934,7 +990,7 @@ seeder(function () {
     $plan1 = ins('fee_plans', $base + ['name' => 'Standard Inside File', 'version' => 1, 'currency' => 'AED', 'total' => 3500, 'advance' => 1000, 'balance_trigger' => 'On selection', 'due_days' => 7, 'terms' => 'AED 1,000 is paid when HR opens the file. The remaining AED 2,500 is payable within 7 days after selection.', 'active' => 1]);
     ins('fee_plans', $base + ['name' => 'Premium Placement', 'version' => 2, 'currency' => 'AED', 'total' => 5000, 'advance' => 1500, 'balance_trigger' => 'On selection', 'due_days' => 10, 'terms' => 'Premium placement with priority interviews.', 'active' => 1]);
     ins('fee_plans', $base + ['name' => 'Driver Package', 'version' => 1, 'currency' => 'AED', 'total' => 2500, 'advance' => 800, 'balance_trigger' => 'On selection', 'due_days' => 7, 'terms' => 'For light and heavy drivers.', 'active' => 1]);
-    $t1 = ins('deployment_teams', $base + ['name' => 'Team Alpha', 'leader' => $u('deploy'), 'members' => $u('deploy') . ',' . $u('hr'), 'notes' => 'Construction and facilities placements']);
+    $t1 = ins('deployment_teams', $base + ['name' => 'Team Alpha', 'leader' => $u('deploy'), 'members' => (string)$u('deploy'), 'notes' => 'Construction and facilities placements']);
     ins('deployment_teams', $base + ['name' => 'Team Hospitality', 'leader' => $u('deploy'), 'members' => (string)$u('deploy'), 'notes' => 'Hotels and restaurants']);
     foreach (['HR screening', 'Trade test', 'Client interview'] as $i => $n) ins('interview_rounds', $base + ['name' => $n, 'sort' => $i + 1]);
     foreach ([['Dubai Investment Park', 'Dubai'], ['Al Quoz Industrial 3', 'Dubai'], ['Musaffah', 'Abu Dhabi']] as $j) ins('job_locations', $base + ['name' => $j[0], 'emirate' => $j[1]]);
@@ -969,7 +1025,8 @@ seeder(function () {
     q('UPDATE candidate_logins SET password_hash=? WHERE candidate_id=?', [password_hash('Candidate@123', PASSWORD_DEFAULT), $ali]);
     ins('interview_locations', $base + ['candidate_id' => $ali, 'seq' => 1, 'company' => 'Emirates Transport Co.', 'position' => 'Heavy Driver', 'location' => 'Al Qusais Depot, Dubai', 'map_link' => 'https://maps.google.com/?q=Al+Qusais', 'interview_at' => date('Y-m-d 10:00:00', strtotime('-2 days')), 'contact' => 'Mr. Rashid · 04 000 0000', 'instructions' => 'Bring original licence and passport copy.', 'response' => 'Not Selected', 'response_note' => 'They needed 5 years UAE experience.', 'responded_at' => $now]);
     ins('interview_locations', $base + ['candidate_id' => $ali, 'seq' => 2, 'company' => 'Gulf Logistics LLC', 'position' => 'Heavy Driver', 'location' => 'Jebel Ali Free Zone, Gate 5', 'interview_at' => date('Y-m-d 09:30:00', strtotime('+1 day')), 'contact' => 'Ms. Leena · 04 111 1111', 'instructions' => 'Report at 9:00.', 'response' => 'Pending']);
-    ins('candidate_messages', $base + ['candidate_id' => $ali, 'kind' => 'Question', 'direction' => 'From candidate', 'body' => 'Can I pay the balance in two parts?', 'assigned_to' => $u('deploy'), 'status' => 'Open']);
+    ins('chat_messages', ['candidate_id' => $ali, 'sender_type' => 'Staff', 'sender_id' => $u('deploy'), 'body' => 'Welcome Ali! I am your deployment officer. Please keep your passport and licence ready for the interview.', 'read_at' => $now, 'created_at' => date('Y-m-d H:i:s', strtotime('-3 hours')), 'archived' => 0]);
+    ins('chat_messages', ['candidate_id' => $ali, 'sender_type' => 'Candidate', 'sender_id' => $ali, 'body' => 'Thank you. Can I pay the balance in two parts?', 'created_at' => date('Y-m-d H:i:s', strtotime('-2 hours')), 'archived' => 0]);
     ins('documents', $base + ['ref_no' => next_number('DOC'), 'doc_type' => 'Passport', 'candidate_id' => $ali, 'doc_no' => 'AB1234567', 'status' => 'Verified', 'expiry' => date('Y-m-d', strtotime('+3 years'))]);
     ins('documents', $base + ['ref_no' => next_number('DOC'), 'doc_type' => 'Driving Licence', 'candidate_id' => $ali, 'status' => 'Missing']);
 

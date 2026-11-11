@@ -2,7 +2,7 @@
 // Bootstrap — every page starts with: require __DIR__ . '/inc/boot.php';
 if (!defined('ROOT')) define('ROOT', dirname(__DIR__));
 define('APP_NAME', 'RH Management');
-define('APP_VERSION', '1.0.0');
+define('APP_VERSION', '1.1.0');
 
 if (!extension_loaded('pdo_sqlite')) {
     http_response_code(500);
@@ -43,6 +43,8 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/functions.php';
 require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/reset.php';
 require_once __DIR__ . '/entity.php';
 require_once __DIR__ . '/layout.php';
 require_once __DIR__ . '/registry.php';

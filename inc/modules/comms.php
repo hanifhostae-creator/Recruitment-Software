@@ -38,18 +38,6 @@ ent('company_goals', ['label' => 'Company Goals', 'one' => 'Goal', 'title' => 't
 ent('goal_milestones', ['label' => 'Goal Milestones', 'one' => 'Goal milestone', 'title' => 'name', 'icon' => 'flag', 'fields' => ['goal_id' => ['Goal', 'ref:company_goals', 'req'], 'name' => ['Milestone', 'text', 'req'], 'due_date' => ['Due', 'date'], 'done' => ['Done', 'bool']], 'list' => ['goal_id', 'name', 'due_date', 'done']]);
 function goal_progress($gid) { $t = row('SELECT COUNT(*) n, SUM(done) d FROM goal_milestones WHERE goal_id=? AND archived=0', [$gid]); return $t['n'] ? round($t['d'] / $t['n'] * 100) : 0; }
 
-/** Send an email through the hosting mail() function and record it in the email log. */
-function send_email($to, $subject, $body, $template = null)
-{
-    $ok = false;
-    if (filter_var($to, FILTER_VALIDATE_EMAIL) && function_exists('mail')) {
-        $headers = 'From: ' . setting('company_short', 'RH Management') . ' <' . setting('company_email', 'info@rhmanagements.com') . ">\r\nContent-Type: text/plain; charset=utf-8";
-        $ok = @mail($to, $subject, $body, $headers);
-    }
-    ins('email_log', ['to_addr' => $to, 'subject' => $subject, 'body' => $body, 'template' => $template, 'status' => $ok ? 'Sent' : 'Failed', 'sent_at' => now(), 'created_by' => me()['id'] ?? null, 'created_at' => now(), 'archived' => 0]);
-    return $ok;
-}
-
 mod('whatsapp', ['label' => 'WhatsApp', 'icon' => 'chat', 'area' => 'Communication', 'order' => 1, 'desc' => 'Central WhatsApp inbox: categories, assignment, links to records, reply notes, manual review queue, integration health and reports.',
     'tabs' => [
         'inbox' => 'wa_messages',

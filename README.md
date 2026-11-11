@@ -27,6 +27,14 @@ Open http://localhost:8000/login.php. The database (`data/rh.sqlite`) is created
 4. Visit the site — the database is created automatically. Change every demo password.
 5. Backup = download `data/rh.sqlite` + the `uploads/` folder (Admin Control Centre → Backup).
 
+## Email and password reset
+1. In hPanel create a mailbox (Emails → Email Accounts), for example `no-reply@yourdomain.com`.
+2. Log in as `admin` → **Settings**:
+   - **System URL**: `https://crm.yourdomain.com`
+   - Email: server `smtp.hostinger.com`, port `465`, security `SSL`, username = the full mailbox address, password = the mailbox password, send-from = the same address.
+3. Press **Send a test email**. Password reset, candidate portal links and notifications are emailed from this mailbox.
+4. Every login page has "Forgot your password?"; admins can also send reset links (Staff & Roles, client and agent logins).
+
 ## Docs
 - Specification: `docs/RH-Management-Complete-Specification.pdf`
 - How work is split into sessions: `CLAUDE.md` · Core API: `docs/core-api.md`

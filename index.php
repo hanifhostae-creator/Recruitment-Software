@@ -7,6 +7,10 @@ $h = (int)date('G');
 page_head(($h < 12 ? 'Good morning' : ($h < 17 ? 'Good afternoon' : 'Good evening')) . ', ' . explode(' ', $u['name'])[0], 'grid', e(date('l, d F Y')) . ' · ' . e($u['role_name']) . ' dashboard — live counters computed from records.',
     (can('candidates', 'add') ? '<a class="btn" href="candidates.php?a=new">' . icon('user-plus', 16) . ' New candidate</a>' : '') . (can('outside', 'add') ? '<a class="btn ghost" href="outside.php?t=demands&a=new">' . icon('plus', 16) . ' New demand</a>' : ''));
 
+if (is_super()) {
+    if (trim((string)setting('site_url', '')) === '') echo '<div class="alert warn">' . icon('alert', 15) . ' <b>Set the System URL</b> (Settings → Company), for example <code>https://crm.yourdomain.com</code>. Password reset and portal emails use it, so every link is safe and correct. <a href="settings.php">Open Settings</a></div>';
+    if (trim((string)setting('smtp_host', '')) === '') echo '<div class="alert warn">' . icon('mail', 15) . ' <b>Email is not set up.</b> Password reset emails need an SMTP mailbox. Settings → Email, then press "Send a test email". <a href="settings.php">Open Settings</a></div>';
+}
 render_widgets();
 
 echo '<div class="grid g3">';

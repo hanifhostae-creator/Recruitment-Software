@@ -5,6 +5,15 @@ $t = g('t', 'users');
 $a = g('a');
 $mods = array_filter($GLOBALS['MODS'], function ($m, $k) { return !in_array($k, PERSONAL_MODULES, true) && !in_array($k, SUPER_ONLY, true); }, ARRAY_FILTER_USE_BOTH);
 
+if (is_post() && g('a') === 'resetlink') {
+    $rid = (int)g('id');
+    if (row('SELECT id FROM users WHERE id=?', [$rid])) {
+        list($url, $em, $addr) = reset_send('staff', $rid, me()['id'], 'An administrator has sent you a password reset link for your RH Management account.');
+        flash($em ? 'Reset link emailed to ' . e($addr) . '.' : 'No email was sent (' . ($addr ? e($GLOBALS['mail_error'] ?? 'email failed') : 'this staff member has no email address') . ').', $em ? 'ok' : 'warn');
+        flash('Reset link (valid 60 minutes, you can share it): <a href="' . e($url) . '">' . e($url) . '</a>', 'info');
+    }
+    redirect('staff.php');
+}
 if (is_post()) {
     if ($t === 'users') {
         $id = (int)g('id');
@@ -58,12 +67,12 @@ if ($t === 'users') {
             . '<div class="fld"><label>Role *</label><select name="role_id" required><option value="">— Select —</option>';
         foreach ($roles as $r) echo '<option value="' . $r['id'] . '"' . ((string)$u['role_id'] === (string)$r['id'] ? ' selected' : '') . '>' . e($r['name']) . '</option>';
         echo '</select></div><div class="fld"><label>' . ($a === 'new' ? 'Temporary password *' : 'Reset password (optional)') . '</label><input type="password" name="password" autocomplete="new-password" placeholder="At least 8 characters, letters and numbers"><small class="muted">The user must change it at next login. Passwords are never shown.</small></div>'
-            . '<div class="fld fld-check"><label class="check"><input type="checkbox" name="active" value="1"' . ($u['active'] ? ' checked' : '') . '> Active</label></div></div><div class="form-actions"><button class="btn">Save</button></div></form></div>';
+            . '<div class="fld fld-check"><label class="check"><input type="checkbox" name="active" value="1"' . ($u['active'] ? ' checked' : '') . '> Active</label></div></div><div class="form-actions"><button class="btn">Save</button></div></form>' . ($a === 'edit' ? '<form method="post" action="staff.php?a=resetlink&id=' . (int)$u['id'] . '" style="margin-top:10px">' . csrf_field() . '<button class="btn ghost">' . icon('mail', 15) . ' Email a password reset link</button></form>' : '') . '</div>';
     } else {
         echo '<div class="toolbar"><span></span><a class="btn" href="staff.php?a=new">' . icon('plus', 16) . ' Add New staff</a></div>';
         $us = rows('SELECT u.*, r.name role FROM users u LEFT JOIN roles r ON r.id=u.role_id ORDER BY u.active DESC, u.name');
         card_open('', '', 'flush');
-        echo simple_table(['Name', 'Username', 'Role', 'Email', 'Last login', 'Status'], array_map(function ($u) { return ['<b>' . e($u['name']) . '</b>', '@' . e($u['username']), e($u['role']), e($u['email']), e($u['last_login'] ? ago($u['last_login']) : 'Never'), ($u['active'] ? badge('Active') : badge('Inactive')) . ($u['must_change'] ? ' <span class="badge b-warn">Must change password</span>' : '')]; }, $us), 'No staff.', array_map(function ($u) { return 'staff.php?a=edit&id=' . $u['id']; }, $us));
+        echo simple_table(['Name', 'Username', 'Role', 'Email', 'Last login', 'Status', 'Password'], array_map(function ($u) { return ['<b>' . e($u['name']) . '</b>', '@' . e($u['username']), e($u['role']), e($u['email']), e($u['last_login'] ? ago($u['last_login']) : 'Never'), ($u['active'] ? badge('Active') : badge('Inactive')) . ($u['must_change'] ? ' <span class="badge b-warn">Must change password</span>' : ''), '<form method="post" action="staff.php?a=resetlink&id=' . $u['id'] . '" data-confirm="Email a password reset link to ' . e($u['name']) . '?">' . csrf_field() . '<button class="btn ghost sm">' . icon('mail', 13) . ' Send reset link</button></form>']; }, $us), 'No staff.', array_map(function ($u) { return 'staff.php?a=edit&id=' . $u['id']; }, $us));
         card_close();
     }
 } else {

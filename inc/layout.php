@@ -78,6 +78,8 @@ function icon($name, $size = 18)
         'printer' => '<path d="M6 9V3h12v6M6 18H4v-7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7h-2"/><rect x="6" y="14" width="12" height="7"/>',
         'copy' => '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
         'sun' => '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+        'volume' => '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/>',
+        'volume-x' => '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6"/>',
         'chevron-down' => '<path d="m6 9 6 6 6-6"/>',
     ];
     $d = $p[$name] ?? $p['grid'];
@@ -98,16 +100,17 @@ function page_start($title, $active = null, $showFlash = true)
 {
     $u = me();
     html_head($title);
-    echo '<body class="app"><a class="skip" href="#main">Skip to content</a><div class="shell">';
+    $since = $u ? (int)val('SELECT COALESCE(MAX(id),0) FROM notifications WHERE user_id=?', [$u['id']]) : 0;
+    echo '<body class="app"' . ($u ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><a class="skip" href="#main">Skip to content</a><div class="shell">';
     // sidebar
     echo '<aside class="side" id="side"><a class="brand" href="index.php"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>Business Management System</small></span></a><nav class="nav">';
     $by = [];
-    foreach ($GLOBALS['MODS'] as $k => $m) if ($m['menu'] && can($k)) $by[$m['area']][] = $m;
+    foreach ($GLOBALS['MODS'] as $k => $m) if ($m['menu'] && can($k) && ($k !== 'chat' || (function_exists('chat_menu_visible') && chat_menu_visible()))) $by[$m['area']][] = $m;
     foreach (AREAS as $area) {
         if (empty($by[$area])) continue;
         usort($by[$area], function ($a, $b) { return $a['order'] <=> $b['order']; });
         echo '<div class="nav-g"><span class="nav-t">' . e($area) . '</span>';
-        foreach ($by[$area] as $m) echo '<a class="' . ($active === $m['key'] ? 'on' : '') . '" href="' . e($m['page']) . '">' . icon($m['icon'], 18) . '<span>' . e($m['label']) . '</span></a>';
+        foreach ($by[$area] as $m) echo '<a class="' . ($active === $m['key'] ? 'on' : '') . '" href="' . e($m['page']) . '">' . icon($m['icon'], 18) . '<span>' . e($m['label']) . '</span>' . ($m['key'] === 'chat' ? '<span class="count" data-chat-badge style="margin-left:auto"' . (($cu = chat_unread_total()) ? '' : ' hidden') . '>' . $cu . '</span>' : '') . '</a>';
         echo '</div>';
     }
     echo '</nav><div class="side-foot">v' . APP_VERSION . ' · ' . e(setting('company_short', 'RH Management')) . '</div></aside><div class="scrim" data-close-side></div>';
@@ -122,8 +125,8 @@ function page_start($title, $active = null, $showFlash = true)
         elseif (!$att['check_out']) echo '<span class="att-on" title="Checked in at ' . e(substr($att['check_in'], 11, 5)) . '"><i></i>' . e(substr($att['check_in'], 11, 5)) . '</span><button class="btn ghost sm" name="_att" value="out">' . icon('logout', 15) . '<span> Check out</span></button>';
         else echo '<span class="att-done">' . icon('check-circle', 15) . ' ' . e(substr($att['check_in'], 11, 5)) . '–' . e(substr($att['check_out'], 11, 5)) . '</span>';
         echo '</form>';
-        echo '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 19) . '</button>'
-            . '<a class="icon-btn" href="notifications.php" aria-label="Notifications">' . icon('bell', 19) . ($unread ? '<span class="dot">' . ($unread > 99 ? '99+' : $unread) . '</span>' : '') . '</a>'
+        echo sound_button() . '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 19) . '</button>'
+            . '<a class="icon-btn" href="notifications.php" aria-label="Notifications">' . icon('bell', 19) . '<span class="dot" data-bell-dot' . ($unread ? '' : ' hidden') . '>' . ($unread > 99 ? '99+' : $unread) . '</span></a>'
             . '<details class="user-menu"><summary><span class="avatar">' . e(strtoupper(substr($u['name'], 0, 1))) . '</span><span class="um-n"><b>' . e($u['name']) . '</b><small>' . e($u['role_name']) . '</small></span>' . icon('chevron-down', 14) . '</summary>'
             . '<div class="um-d"><a href="mydash.php">' . icon('user', 15) . ' My Dashboard</a><a href="login.php?a=change">' . icon('lock', 15) . ' Change password</a><a href="logout.php">' . icon('logout', 15) . ' Log out</a></div></details>';
     }
@@ -133,7 +136,7 @@ function page_start($title, $active = null, $showFlash = true)
 
 function page_end()
 {
-    echo '</main><footer class="foot">© ' . date('Y') . ' ' . e(setting('company_name', 'RH Business Solutions & Marketing Management')) . ' · Dubai, UAE</footer></div></div><div id="confirm" class="modal" hidden><div class="modal-box" role="dialog" aria-modal="true"><h3>Please confirm</h3><p data-msg></p><div class="modal-a"><button class="btn ghost" data-no>Cancel</button><button class="btn danger" data-yes>Confirm</button></div></div></div>'
+    echo '</main><footer class="foot">© ' . date('Y') . ' ' . e(setting('company_name', 'RH Business Solutions & Marketing Management')) . ' · Dubai, UAE</footer></div></div><div id="toasts" class="toasts" aria-live="polite"></div><div id="confirm" class="modal" hidden><div class="modal-box" role="dialog" aria-modal="true"><h3>Please confirm</h3><p data-msg></p><div class="modal-a"><button class="btn ghost" data-no>Cancel</button><button class="btn danger" data-yes>Confirm</button></div></div></div>'
         . '<script src="assets/app.js?v=' . APP_VERSION . '"></script></body></html>';
 }
 
@@ -147,19 +150,26 @@ function page_head($title, $iconName = null, $sub = '', $right = '')
 function portal_start($title, $portalName, array $nav = [], $active = '', $logout = '')
 {
     html_head($title);
-    echo '<body class="portal"><header class="p-top"><a class="brand" href="?"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>' . e($portalName) . '</small></span></a>';
+    $poll = !empty($_SESSION['portal']) && $_SESSION['portal']['type'] === 'candidate';
+    $since = $poll ? (int)val("SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE candidate_id=? AND sender_type='Staff'", [$_SESSION['portal']['id']]) : 0;
+    echo '<body class="portal"' . ($poll ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><header class="p-top"><a class="brand" href="?"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>' . e($portalName) . '</small></span></a>';
     if ($nav) {
         echo '<nav class="p-nav">';
         foreach ($nav as $k => $l) echo '<a class="' . ($k === $active ? 'on' : '') . '" href="?p=' . e($k) . '">' . e($l) . '</a>';
         echo '</nav>';
     }
     if ($logout) echo '<a class="btn ghost sm" href="' . e($logout) . '">' . icon('logout', 15) . ' Log out</a>';
-    echo '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 18) . '</button></header><main class="p-main" id="main">';
+    echo ($poll ? sound_button() : '') . '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 18) . '</button></header><main class="p-main" id="main">';
     foreach (flash() as $f) echo '<div class="alert ' . e($f[0]) . '" role="status">' . $f[1] . '</div>';
 }
 function portal_end()
 {
-    echo '</main><footer class="foot">© ' . date('Y') . ' RH Business Solutions &amp; Marketing Management · Dubai, UAE · <a href="mailto:info@rhmanagements.com">info@rhmanagements.com</a></footer><script src="assets/app.js?v=' . APP_VERSION . '"></script></body></html>';
+    echo '</main><footer class="foot">© ' . date('Y') . ' RH Business Solutions &amp; Marketing Management · Dubai, UAE · <a href="mailto:info@rhmanagements.com">info@rhmanagements.com</a></footer><div id="toasts" class="toasts" aria-live="polite"></div><script src="assets/app.js?v=' . APP_VERSION . '"></script></body></html>';
+}
+
+function sound_button()
+{
+    return '<button class="icon-btn" type="button" data-sound-toggle aria-label="Notification sound on or off" title="Notification sound on / off"><span class="s-on">' . icon('volume', 18) . '</span><span class="s-off">' . icon('volume-x', 18) . '</span></button>';
 }
 
 /** Small helpers for custom screens. */

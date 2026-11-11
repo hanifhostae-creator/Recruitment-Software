@@ -12,7 +12,7 @@ if (empty($_SESSION['portal']) || $_SESSION['portal']['type'] !== 'client') {
         redirect('client_portal.php');
     }
     portal_start('Client login', 'Client Portal');
-    echo '<div class="card p-login"><h2>' . icon('building', 22) . ' Client portal</h2><p class="muted">Track your demands, candidate profiles, interviews, visas and deployment.</p><form method="post">' . csrf_field() . '<div class="fld" style="margin-bottom:12px"><label>Username</label><input name="username" required autocomplete="username"></div><div class="fld" style="margin-bottom:12px"><label>Password</label><input type="password" name="password" required autocomplete="current-password"></div><button class="btn" style="width:100%">' . icon('login', 16) . ' Sign in</button></form><p class="small" style="margin-top:14px"><a href="login.php">Staff login</a></p></div>';
+    echo '<div class="card p-login"><h2>' . icon('building', 22) . ' Client portal</h2><p class="muted">Track your demands, candidate profiles, interviews, visas and deployment.</p><form method="post">' . csrf_field() . '<div class="fld" style="margin-bottom:12px"><label>Username</label><input name="username" required autocomplete="username"></div><div class="fld" style="margin-bottom:12px"><label>Password</label><input type="password" name="password" required autocomplete="current-password"></div><button class="btn" style="width:100%">' . icon('login', 16) . ' Sign in</button></form><p class="small" style="margin-top:14px"><a href="forgot.php?t=client">Forgot your password?</a> · <a href="login.php">Staff login</a></p></div>';
     portal_end();
     exit;
 }

@@ -59,7 +59,7 @@ if (empty($_SESSION['portal']) || $_SESSION['portal']['type'] !== 'candidate') {
     echo '<div class="card p-login"><h2>' . icon('user', 22) . ' Candidate portal</h2><nav class="tabs"><a class="' . (!$legacy ? 'on' : '') . '" href="portal.php">Email &amp; password</a><a class="' . ($legacy ? 'on' : '') . '" href="portal.php?legacy=1">File number &amp; phone</a></nav><form method="post">' . csrf_field();
     if ($legacy) echo '<input type="hidden" name="mode" value="legacy"><div class="fld" style="margin-bottom:12px"><label>File number</label><input name="file_no" required placeholder="IN-FILE-2026-00001"></div><div class="fld" style="margin-bottom:12px"><label>Phone number on your file</label><input name="phone" required type="tel"></div>';
     else echo '<input type="hidden" name="mode" value="email"><div class="fld" style="margin-bottom:12px"><label>Email address</label><input name="username" required autocomplete="username"></div><div class="fld" style="margin-bottom:12px"><label>Password</label><input type="password" name="password" required autocomplete="current-password"></div>';
-    echo '<button class="btn" style="width:100%">' . icon('login', 16) . ' Sign in</button></form><p class="muted small" style="margin-top:14px">New? Your deployment officer gives you a registration link. Not registered yet? <a href="candidate_register.php">Register as a candidate</a>.</p><p class="small"><a href="login.php">Staff login</a></p></div>';
+    echo '<button class="btn" style="width:100%">' . icon('login', 16) . ' Sign in</button></form><p class="small" style="margin-top:14px"><a href="forgot.php?t=candidate">Forgot your password?</a></p><p class="muted small">New? Your deployment officer gives you a registration link. Not registered yet? <a href="candidate_register.php">Register as a candidate</a>.</p><p class="small"><a href="login.php">Staff login</a></p></div>';
     portal_end();
     exit;
 }
@@ -70,6 +70,8 @@ $c = row('SELECT * FROM candidates WHERE id=?', [$cid]);
 $f = candidate_file($cid);
 $m = file_money($f);
 $pg = g('p', 'home');
+if ($pg === 'help') $pg = 'chat';
+if ($pg === 'chat' && g('frag')) { q("UPDATE chat_messages SET read_at=? WHERE candidate_id=? AND sender_type='Staff' AND read_at IS NULL", [now(), $cid]); echo chat_messages_html($cid, 'candidate'); exit; }
 
 if (is_post()) {
     if ($pg === 'locations') {
@@ -85,18 +87,19 @@ if (is_post()) {
         }
         redirect('portal.php?p=locations');
     }
-    if ($pg === 'help') {
-        if (!p('body')) { flash('Write your message.', 'bad'); redirect('portal.php?p=help'); }
-        list($path, $err) = upload_file('file', 'messages');
-        if ($err) { flash($err, 'bad'); redirect('portal.php?p=help'); }
-        $kind = in_array(p('kind'), ['Issue', 'Question', 'Missing Document', 'Schedule Change'], true) ? p('kind') : 'Question';
-        $owner = $c['deploy_officer'] ?: $c['hr_officer'];
-        ins('candidate_messages', ['candidate_id' => $cid, 'kind' => $kind, 'direction' => 'From candidate', 'body' => p('body'), 'file' => $path, 'assigned_to' => $owner, 'status' => 'Open', 'created_at' => now(), 'archived' => 0]);
-        if ($kind === 'Missing Document' && $path) ins('documents', ['ref_no' => next_number('DOC'), 'doc_type' => 'Other', 'doc_type_other' => 'Uploaded by candidate', 'candidate_id' => $cid, 'status' => 'Received', 'file' => $path, 'created_at' => now(), 'archived' => 0]);
-        if ($owner) notify($owner, 'Candidate portal: ' . $kind . ' from ' . $c['full_name'], ent_url('candidates', $cid));
-        audit('portal-message', 'candidates', $cid, null, ['kind' => $kind]);
-        flash('Sent. A deployment team member will reply here.');
-        redirect('portal.php?p=help');
+    if ($pg === 'chat') {
+        $parts = chat_participants($cid);
+        $body = mb_substr(p('body'), 0, 4000);
+        list($path, $err) = upload_file('file', 'chat');
+        if (!$parts) flash('The chat opens when your file is assigned to the deployment team.', 'bad');
+        elseif ($err) flash($err, 'bad');
+        elseif ($body === '' && !$path) flash('Write a message or attach a file.', 'bad');
+        else {
+            chat_add($cid, 'Candidate', $cid, $body, $path);
+            if ($path) ins('documents', ['ref_no' => next_number('DOC'), 'doc_type' => 'Other', 'doc_type_other' => 'Sent in chat', 'candidate_id' => $cid, 'status' => 'Received', 'file' => $path, 'created_at' => now(), 'archived' => 0]);
+            foreach ($parts as $pid) notify($pid, 'New chat message from ' . $c['full_name'], 'chat.php?c=' . $cid);
+        }
+        redirect('portal.php?p=chat');
     }
     if ($pg === 'profile') {
         $d = ['whatsapp' => p('whatsapp'), 'skills' => p('skills'), 'experience' => p('experience'), 'preferred_positions' => p('preferred_positions'), 'qualification' => p('qualification'), 'updated_at' => now()];
@@ -108,7 +111,9 @@ if (is_post()) {
     }
 }
 
-portal_start('My portal', 'Candidate Portal', ['home' => 'My file', 'locations' => 'My Interview Locations', 'payments' => 'Payments', 'help' => 'Help centre', 'profile' => 'Profile'], $pg, 'portal.php?logout=1');
+if ($pg === 'chat') q("UPDATE chat_messages SET read_at=? WHERE candidate_id=? AND sender_type='Staff' AND read_at IS NULL", [now(), $cid]);
+$unreadChat = (int)val("SELECT COUNT(*) FROM chat_messages WHERE candidate_id=? AND sender_type='Staff' AND read_at IS NULL AND archived=0", [$cid]);
+portal_start('My portal', 'Candidate Portal', ['home' => 'My file', 'locations' => 'My Interview Locations', 'payments' => 'Payments', 'chat' => 'Chat' . ($unreadChat ? ' (' . $unreadChat . ')' : ''), 'profile' => 'Profile'], $pg, 'portal.php?logout=1');
 echo '<div class="p-hero"><h1>Hello, ' . e(explode(' ', $c['full_name'])[0]) . '</h1><p>' . e($c['ref_no']) . ($f ? ' · File ' . e($f['ref_no']) . ' opened ' . e(dfmt($f['created_at'])) : '') . ' · ' . e($c['applied_position']) . '</p></div>';
 if ($c['stage'] === 'Closed') echo '<div class="banner">' . icon('lock', 20) . ' Your file is closed.</div>';
 
@@ -160,16 +165,16 @@ if ($pg === 'payments') {
     }
     card_close();
 }
-if ($pg === 'help') {
-    echo '<div class="grid g2">';
-    card_open(icon('message', 17) . ' Ask for help');
-    echo '<form method="post" enctype="multipart/form-data">' . csrf_field() . '<div class="fld" style="margin-bottom:12px"><label>What do you need?</label><select name="kind"><option>Question</option><option>Issue</option><option>Missing Document</option><option>Schedule Change</option></select></div><div class="fld" style="margin-bottom:12px"><label>Message *</label><textarea name="body" required rows="4"></textarea></div><div class="fld" style="margin-bottom:12px"><label>Attach a document (optional)</label><input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"><small class="muted">PDF, DOC, DOCX, JPG or PNG · max 10 MB</small></div><button class="btn">' . icon('send', 15) . ' Send</button></form>';
+if ($pg === 'chat') {
+    $parts = chat_participants($cid);
+    card_open(icon('chat', 17) . ' Chat with your deployment team', '<span class="muted small">' . icon('lock', 13) . ' Private: only your deployment team can read this</span>');
+    if (!$parts) echo '<p class="muted">The chat opens as soon as your file is assigned to the deployment team. You will see a notification here.</p>';
+    else {
+        echo '<p class="muted small">Your deployment team: <b>' . e(implode(', ', array_map('user_name', $parts))) . '</b></p><div class="msgs" id="msgs" style="max-height:55vh">' . chat_messages_html($cid, 'candidate') . '</div>'
+            . '<form method="post" enctype="multipart/form-data" class="chat-form" action="portal.php?p=chat">' . csrf_field() . '<div style="flex:1"><textarea name="body" rows="2" placeholder="Type your message…" maxlength="4000"></textarea><input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="margin-top:6px;font-size:12px"><small class="muted">You can also send a document (PDF, DOC, DOCX, JPG, PNG · max 10 MB).</small></div><button class="btn">' . icon('send', 15) . ' Send</button></form>'
+            . '<script>(function(){var m=document.getElementById("msgs"),last=m.innerHTML;m.scrollTop=m.scrollHeight;setInterval(function(){if(document.hidden)return;fetch("portal.php?p=chat&frag=1",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h!==null&&h!==last){var atEnd=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.innerHTML=h;last=h;if(atEnd)m.scrollTop=m.scrollHeight}}).catch(function(){})},8000)})();</script>';
+    }
     card_close();
-    $msgs = rows('SELECT * FROM candidate_messages WHERE candidate_id=? AND archived=0 ORDER BY id DESC', [$cid]);
-    card_open(icon('inbox', 17) . ' My conversations');
-    echo simple_table(['When', 'Type', 'Message', 'Assigned to', 'Status'], array_map(function ($m) { return [e(dtfmt($m['created_at'])), e($m['direction'] === 'To candidate' ? 'From RH' : $m['kind']), nl2br(e($m['body'])), e(user_name($m['assigned_to'])), badge($m['status'])]; }, $msgs), 'No messages yet.');
-    card_close();
-    echo '</div>';
 }
 if ($pg === 'profile') {
     card_open(icon('user', 17) . ' My profile');

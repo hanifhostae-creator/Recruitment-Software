@@ -28,6 +28,16 @@ if (is_post()) {
         if (p('toggle')) { q('UPDATE custom_fields SET active=1-active WHERE id=?', [(int)p('toggle')]); flash('Custom field updated.'); }
         redirect('admin.php?t=fields');
     }
+    if ($t === 'chat') {
+        if (p('revoke')) { q('UPDATE chat_access SET archived=1, updated_at=? WHERE id=?', [now(), (int)p('revoke')]); audit('chat-access-revoke', 'chat_access', (int)p('revoke')); flash('Chat access removed.'); }
+        elseif ((int)p('user_id')) {
+            $cand = (int)p('candidate_id') ?: null;
+            $id = ins('chat_access', ['user_id' => (int)p('user_id'), 'candidate_id' => $cand, 'note' => p('note'), 'granted_by' => me()['id'], 'created_at' => now(), 'archived' => 0]);
+            audit('chat-access-grant', 'chat_access', $id, null, ['user' => user_name((int)p('user_id')), 'candidate' => $cand ? ent_title('candidates', $cand) : 'ALL chats'], p('note'));
+            flash('Chat access granted to ' . e(user_name((int)p('user_id'))) . '.');
+        }
+        redirect('admin.php?t=chat');
+    }
     if ($t === 'archive') {
         $d = entdef(p('ent'));
         if ($d) { q('UPDATE ' . $d['table'] . ' SET archived=0, updated_at=? WHERE id=?', [now(), (int)p('id')]); audit('restore', $d['table'], (int)p('id')); flash($d['one'] . ' restored.'); }
@@ -37,7 +47,7 @@ if (is_post()) {
 
 page_start('Admin Control Centre', 'admin');
 page_head('Admin Control Centre', 'settings', 'Configure lists, custom fields, archive and restore, roles, settings and backups — no developer needed.');
-$tabs = ['options' => 'Custom options', 'fields' => 'Custom fields', 'archive' => 'Archive & restore', 'roles' => 'Roles & permissions', 'settings' => 'System settings', 'backup' => 'Backup & health'];
+$tabs = ['options' => 'Custom options', 'fields' => 'Custom fields', 'archive' => 'Archive & restore', 'chat' => 'Chat access', 'roles' => 'Roles & permissions', 'settings' => 'System settings', 'backup' => 'Backup & health'];
 echo '<nav class="tabs">';
 foreach ($tabs as $k => $l) echo '<a class="' . ($k === $t ? 'on' : '') . '" href="' . ($k === 'roles' ? 'staff.php?t=roles' : ($k === 'settings' ? 'settings.php' : '?t=' . $k)) . '">' . e($l) . '</a>';
 echo '</nav>';
@@ -82,6 +92,20 @@ if ($t === 'archive') {
         echo simple_table(['Record type', 'Archived'], $sum, 'Nothing is archived.');
         card_close();
     }
+}
+if ($t === 'chat') {
+    echo '<div class="alert info">' . icon('lock', 15) . ' Candidate chats are private. Only the assigned deployment officer and team can read them. You (Super Admin) can read any chat, and every view by someone other than the deployment team is written to the audit log. Give another staff member access below.</div><div class="grid g2">';
+    echo '<div class="card"><div class="card-h"><h3>' . icon('plus', 17) . ' Give access</h3></div><form method="post" action="?t=chat">' . csrf_field() . '<div class="fld" style="margin-bottom:12px"><label>Staff member *</label><select name="user_id" required><option value="">— Select —</option>';
+    foreach (staff_list() as $s) echo '<option value="' . $s['id'] . '">' . e($s['name']) . '</option>';
+    echo '</select></div><div class="fld" style="margin-bottom:12px"><label>Which chat?</label><select name="candidate_id"><option value="">ALL candidate chats</option>';
+    foreach (rows('SELECT id, ref_no, full_name FROM candidates WHERE archived=0 ORDER BY id DESC LIMIT 300') as $c) echo '<option value="' . $c['id'] . '">' . e($c['ref_no'] . ' · ' . $c['full_name']) . '</option>';
+    echo '</select></div><div class="fld" style="margin-bottom:12px"><label>Reason</label><input name="note" placeholder="For example: supervising complaint"></div><button class="btn">Grant access</button></form></div>';
+    $gr = rows('SELECT * FROM chat_access WHERE archived=0 ORDER BY id DESC');
+    echo '<div class="card"><div class="card-h"><h3>' . icon('shield', 17) . ' Who has access <span class="count">' . count($gr) . '</span></h3></div>' . simple_table(['Staff member', 'Chat', 'Reason', 'Granted', ''], array_map(function ($g) { return ['<b>' . e(user_name($g['user_id'])) . '</b>', $g['candidate_id'] ? e(ent_title('candidates', $g['candidate_id'])) : '<span class="badge b-warn">ALL chats</span>', e($g['note']), e(dfmt($g['created_at'])) . '<br><small class="muted">by ' . e(user_name($g['granted_by'])) . '</small>', '<form method="post" action="?t=chat" data-confirm="Remove this access?">' . csrf_field() . '<input type="hidden" name="revoke" value="' . $g['id'] . '"><button class="btn ghost sm danger">Remove</button></form>']; }, $gr), 'Nobody has been given access. Only the deployment teams can read their chats.') . '</div></div>';
+    $views = rows("SELECT * FROM audit WHERE action IN ('chat-view','chat-file-view','chat-denied') ORDER BY id DESC LIMIT 25");
+    card_open(icon('eye', 17) . ' Recent chat views by people outside the deployment team');
+    echo simple_table(['When', 'Who', 'What', 'Candidate'], array_map(function ($a) { return [e(dtfmt($a['at'])), e($a['actor']), badge($a['action'] === 'chat-denied' ? 'Denied' : 'Viewed'), e(ent_title('candidates', $a['rec_id']))]; }, $views), 'No such views yet.');
+    card_close();
 }
 if ($t === 'backup') {
     $size = is_file(ROOT . '/data/rh.sqlite') ? filesize(ROOT . '/data/rh.sqlite') : 0;

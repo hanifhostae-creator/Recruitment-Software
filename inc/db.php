@@ -68,6 +68,8 @@ function core_schema()
         'CREATE TABLE IF NOT EXISTS staff_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, from_user INTEGER, to_user INTEGER, body TEXT, is_read INTEGER DEFAULT 0, at TEXT)',
         'CREATE TABLE IF NOT EXISTS wa_webhook_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, method TEXT, body TEXT, result TEXT)',
         'CREATE TABLE IF NOT EXISTS candidate_logins (id INTEGER PRIMARY KEY AUTOINCREMENT, candidate_id INTEGER UNIQUE, username TEXT, legacy_slug TEXT, password_hash TEXT, token TEXT, token_expires TEXT, last_login TEXT, created_at TEXT)',
+        'CREATE TABLE IF NOT EXISTS password_resets (id INTEGER PRIMARY KEY AUTOINCREMENT, acct_type TEXT, acct_id INTEGER, token_hash TEXT, expires_at TEXT, used_at TEXT, created_at TEXT, ip TEXT, requested_by INTEGER)',
+        'CREATE INDEX IF NOT EXISTS ix_pwr_token ON password_resets(token_hash)',
         'CREATE TABLE IF NOT EXISTS custom_fields (id INTEGER PRIMARY KEY AUTOINCREMENT, entity TEXT, label TEXT, type TEXT, options TEXT, required INTEGER DEFAULT 0, active INTEGER DEFAULT 1)',
         'CREATE TABLE IF NOT EXISTS custom_values (id INTEGER PRIMARY KEY AUTOINCREMENT, field_id INTEGER, entity TEXT, rec_id INTEGER, value TEXT)',
     ];
@@ -98,4 +100,5 @@ function db_ready()
         q("INSERT OR REPLACE INTO settings (k,v) VALUES ('seeded',?)", [date('c')]);
         db()->commit();
     }
+    if (function_exists('apply_upgrades')) apply_upgrades();
 }

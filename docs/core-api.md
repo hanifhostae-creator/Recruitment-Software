@@ -45,3 +45,12 @@ Field types: text textarea email phone url int number money date datetime time b
 | `options($list)` / `opt_defaults($list, [...])` | configurable dropdown values |
 | `chart_bars/chart_cols/chart_donut/progress` | SVG charts, no library |
 | `card_open/card_close/simple_table/badge/icon` | UI building blocks |
+
+## Email, password reset, live alerts and private chat (v1.1)
+| Piece | What it does |
+|---|---|
+| `send_email($to, $subject, $plain, $template, ['button'=>[label,url], 'sensitive'=>true])` | Sends a branded HTML email through the SMTP mailbox set in Settings → Email (falls back to PHP `mail()`). Every email is logged; `sensitive` hides secure links in the log. The failure reason is in `$GLOBALS['mail_error']`. |
+| `app_url()` | Public address for email links. Uses Settings → System URL (set it, it prevents Host-header link tampering). |
+| `reset_send($type, $id, $byUser)` | Creates a one-time reset link (60 min, only a SHA-256 hash is stored) and emails it. Types: staff, candidate, client, agent. Pages: `forgot.php`, `reset.php`. |
+| `notify($uid, $text, $link)` / `notify_role('Reception', ...)` | In-app notification. `assets/app.js` polls `poll.php` every 12 s and plays a beep + pop-up for new ones (sound toggle in the top bar). |
+| `chat_participants($cid)`, `chat_can($cid)`, `chat_scope()` | Private candidate chat. Only the assigned deployment officer and team can read it; the Super Admin can, and may grant others in Admin → Chat access. Non-participant views are audited. Attachments are served by `file.php` with the same check. |

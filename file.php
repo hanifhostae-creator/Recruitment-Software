@@ -7,7 +7,12 @@ $path = realpath(ROOT . '/uploads/' . $f);
 if (!$f || !$base || !$path || strpos($path, $base . DIRECTORY_SEPARATOR) !== 0 || !is_file($path)) { http_response_code(404); exit('File not found.'); }
 
 $allowed = false;
-if (me()) $allowed = true;
+$chatRow = row('SELECT candidate_id FROM chat_messages WHERE file=?', [$f]);
+if ($chatRow) {
+    if (me()) $allowed = chat_can($chatRow['candidate_id']);
+    elseif (!empty($_SESSION['portal']) && $_SESSION['portal']['type'] === 'candidate') $allowed = (int)$_SESSION['portal']['id'] === (int)$chatRow['candidate_id'];
+    if ($allowed && me() && !chat_is_participant($chatRow['candidate_id'])) audit('chat-file-view', 'candidates', $chatRow['candidate_id']);
+} elseif (me()) $allowed = true;
 elseif (!empty($_SESSION['portal'])) {
     $pt = $_SESSION['portal'];
     if ($pt['type'] === 'candidate') {

@@ -158,8 +158,10 @@ function field_input($k, $f, $v, $name = null)
         case 'bool': return '<label class="check"><input type="hidden" name="' . $name . '" value="0"><input type="checkbox" name="' . $name . '" value="1"' . ($v ? ' checked' : '') . '> ' . e($f['label']) . '</label>';
         case 'file': $in = '<input id="' . $id . '" type="file" name="' . $name . '"' . (!empty($f['accept']) ? ' accept="' . e($f['accept']) . '"' : ' accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"') . ((!empty($f['req']) || !empty($f['req_new'])) && !$v ? ' required' : '') . '>' . ($v ? '<small class="muted">Current: ' . file_link($v, basename($v)) . '</small>' : '<small class="muted">PDF, DOC, DOCX, JPG or PNG · max 10 MB</small>'); break;
         case 'user':
+            $ulist = staff_list($f['role'] ?? null);
+            if ($v && !in_array((string)$v, array_map('strval', array_column($ulist, 'id')), true)) $ulist[] = ['id' => $v, 'name' => user_name($v)];
             $in = '<select id="' . $id . '" name="' . $name . '"' . $req . '><option value="">— Select —</option>';
-            foreach (staff_list() as $s) $in .= '<option value="' . $s['id'] . '"' . ((string)$v === (string)$s['id'] ? ' selected' : '') . '>' . e($s['name']) . '</option>';
+            foreach ($ulist as $s) $in .= '<option value="' . $s['id'] . '"' . ((string)$v === (string)$s['id'] ? ' selected' : '') . '>' . e($s['name']) . '</option>';
             $in .= '</select>'; break;
         case 'users':
             $sel = $v ? explode(',', $v) : [];
@@ -248,6 +250,8 @@ function crud_handle($key, $base, $mod, array $opt = [])
             $res = $act['do']($row, $mod);
             if (is_string($res)) { flash($res, 'bad'); $_SESSION['form_old'] = $_POST; redirect(u($base, ['a' => 'view', 'id' => $id, 'act' => g('act')])); }
             flash(is_array($res) && isset($res['msg']) ? $res['msg'] : ($act['done'] ?? 'Saved.'));
+            $back = (string)p('_back');
+            if ($back !== '' && preg_match('#^[a-z_]+\.php(\?[A-Za-z0-9_=&%.-]*)?$#', $back)) redirect($back);
             redirect(is_array($res) && isset($res['go']) ? $res['go'] : u($base, ['a' => 'view', 'id' => $id]));
         case 'archive':
             require_action($mod, 'delete');
