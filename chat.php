@@ -51,7 +51,7 @@ else {
     if (!$isPart) echo '<div class="alert warn" style="margin:10px 16px 0">You are viewing this chat with special permission. Your access is recorded in the audit log.</div>';
     echo '<div class="msgs" id="msgs">' . chat_messages_html($cid, 'staff') . '</div>'
         . '<form method="post" enctype="multipart/form-data" class="chat-form" action="chat.php?c=' . $cid . '">' . csrf_field() . '<div style="flex:1"><textarea name="body" rows="2" placeholder="Type a message to the candidate…" maxlength="4000"></textarea><input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="margin-top:6px;font-size:12px"></div><button class="btn">' . icon('send', 15) . ' Send</button></form>'
-        . '<script>(function(){var m=document.getElementById("msgs"),last=m.innerHTML;m.scrollTop=m.scrollHeight;setInterval(function(){if(document.hidden)return;fetch("chat.php?c=' . $cid . '&frag=1",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h!==null&&h!==last){var atEnd=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.innerHTML=h;last=h;if(atEnd)m.scrollTop=m.scrollHeight}}).catch(function(){})},8000)})();</script>';
+        . '<script nonce="' . csp_nonce() . '">(function(){var m=document.getElementById("msgs"),last=m.innerHTML;m.scrollTop=m.scrollHeight;setInterval(function(){if(document.hidden)return;fetch("chat.php?c=' . $cid . '&frag=1",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h!==null&&h!==last){var atEnd=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.innerHTML=h;last=h;if(atEnd)m.scrollTop=m.scrollHeight}}).catch(function(){})},8000)})();</script>';
 }
 echo '</div></div>';
 page_end();

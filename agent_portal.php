@@ -5,6 +5,7 @@ if (g('logout')) { portal_logout(); flash('You have logged out.'); redirect('age
 
 if (empty($_SESSION['portal']) || $_SESSION['portal']['type'] !== 'agent') {
     if (is_post()) {
+        if (too_many_attempts()) { flash('Too many failed attempts. Please wait 15 minutes.', 'bad'); redirect('agent_portal.php'); }
         $u = row('SELECT * FROM agent_users WHERE lower(username)=lower(?) AND active=1 AND archived=0', [p('username')]);
         if ($u && password_verify((string)($_POST['password'] ?? ''), (string)$u['password_hash'])) { portal_login('agent', $u['id'], $u['name']); redirect('agent_portal.php'); }
         audit('portal-login-failed', 'agent_users', null, null, ['username' => p('username')]);

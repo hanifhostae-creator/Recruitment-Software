@@ -93,7 +93,7 @@ function html_head($title)
         . '<link rel="icon" href="assets/img/rh-mark.png"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
         . '<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">'
         . '<link rel="stylesheet" href="assets/app.css?v=' . APP_VERSION . '">'
-        . '<script>try{var t=localStorage.getItem("rh-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script></head>';
+        . '<script nonce="' . csp_nonce() . '">try{var t=localStorage.getItem("rh-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script></head>';
 }
 
 function page_start($title, $active = null, $showFlash = true)

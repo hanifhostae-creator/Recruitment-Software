@@ -57,14 +57,14 @@ function ent_migrate()
 {
     foreach ($GLOBALS['ENT'] as $d) {
         $t = $d['table'];
-        db()->exec("CREATE TABLE IF NOT EXISTS $t (id INTEGER PRIMARY KEY AUTOINCREMENT, ref_no TEXT, created_by INTEGER, created_at TEXT, updated_by INTEGER, updated_at TEXT, archived INTEGER DEFAULT 0)");
-        $have = array_column(rows("PRAGMA table_info($t)"), 'name');
+        db_ddl("CREATE TABLE IF NOT EXISTS $t (id INTEGER PRIMARY KEY AUTOINCREMENT, ref_no TEXT, created_by INTEGER, created_at TEXT, updated_by INTEGER, updated_at TEXT, archived INTEGER DEFAULT 0)");
+        $have = db_columns($t);
         foreach ($d['fields'] as $k => $f) foreach (field_cols($k, $f) as $c => $type) {
-            if (!in_array($c, $have, true)) { db()->exec("ALTER TABLE $t ADD COLUMN $c $type"); $have[] = $c; }
+            if (!in_array($c, $have, true)) { db_ddl("ALTER TABLE $t ADD COLUMN $c $type"); $have[] = $c; }
         }
-        foreach ($d['extra_cols'] ?? [] as $c => $type) if (!in_array($c, $have, true)) { db()->exec("ALTER TABLE $t ADD COLUMN $c $type"); $have[] = $c; }
-        if ($d['prefix']) db()->exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_{$t}_ref ON $t(ref_no)");
-        foreach ($d['fields'] as $k => $f) if ($f['type'] === 'ref' || $f['type'] === 'user') db()->exec("CREATE INDEX IF NOT EXISTS ix_{$t}_$k ON $t($k)");
+        foreach ($d['extra_cols'] ?? [] as $c => $type) if (!in_array($c, $have, true)) { db_ddl("ALTER TABLE $t ADD COLUMN $c $type"); $have[] = $c; }
+        if ($d['prefix']) db_ddl("CREATE UNIQUE INDEX IF NOT EXISTS ux_{$t}_ref ON $t(ref_no)");
+        foreach ($d['fields'] as $k => $f) if ($f['type'] === 'ref' || $f['type'] === 'user') db_ddl("CREATE INDEX IF NOT EXISTS ix_{$t}_$k ON $t($k)");
     }
 }
 function field_cols($k, $f)
@@ -73,6 +73,7 @@ function field_cols($k, $f)
         case 'int': case 'ref': case 'user': case 'bool': return [$k => 'INTEGER'];
         case 'number': case 'money': return [$k => 'REAL'];
         case 'password': return ['password_hash' => 'TEXT'];
+        case 'textarea': case 'url': case 'users': return [$k => 'LONGTEXT'];
         default: return !empty($f['other']) ? [$k => 'TEXT', $k . '_other' => 'TEXT'] : [$k => 'TEXT'];
     }
 }
@@ -154,7 +155,7 @@ function field_input($k, $f, $v, $name = null)
         case 'email': $in = '<input id="' . $id . '" type="email" name="' . $name . '" value="' . e($v) . '"' . $req . '>'; break;
         case 'phone': $in = '<input id="' . $id . '" type="tel" name="' . $name . '" value="' . e($v) . '"' . $req . '>'; break;
         case 'url': $in = '<input id="' . $id . '" type="url" name="' . $name . '" value="' . e($v) . '" placeholder="https://"' . $req . '>'; break;
-        case 'password': $in = '<input id="' . $id . '" type="password" name="' . $name . '" autocomplete="new-password" placeholder="' . ($v ? 'Leave blank to keep the current password' : 'At least 8 characters') . '">'; break;
+        case 'password': $in = '<input id="' . $id . '" type="password" name="' . $name . '" autocomplete="new-password" placeholder="' . ($v ? 'Leave blank to keep the current password' : 'At least 10 characters') . '">'; break;
         case 'bool': return '<label class="check"><input type="hidden" name="' . $name . '" value="0"><input type="checkbox" name="' . $name . '" value="1"' . ($v ? ' checked' : '') . '> ' . e($f['label']) . '</label>';
         case 'file': $in = '<input id="' . $id . '" type="file" name="' . $name . '"' . (!empty($f['accept']) ? ' accept="' . e($f['accept']) . '"' : ' accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"') . ((!empty($f['req']) || !empty($f['req_new'])) && !$v ? ' required' : '') . '>' . ($v ? '<small class="muted">Current: ' . file_link($v, basename($v)) . '</small>' : '<small class="muted">PDF, DOC, DOCX, JPG or PNG · max 10 MB</small>'); break;
         case 'user':
@@ -332,7 +333,8 @@ function crud_where($d, $mod, array $opt)
         $v = g('f_' . $k);
         if ($v !== '' && isset($d['fields'][$k])) { $w[] = "$k=?"; $p[] = $v; }
     }
-    if (g('from') && g('datecol')) { $w[] = g('datecol') . '>=?'; $p[] = g('from'); }
+    $dc = g('datecol');
+    if (g('from') && ($dc === 'created_at' || (isset($d['fields'][$dc]) && in_array($d['fields'][$dc]['type'], ['date', 'datetime'], true)))) { $w[] = $dc . '>=?'; $p[] = g('from'); }
     return [implode(' AND ', $w), $p];
 }
 
@@ -483,6 +485,12 @@ function crud_save($d, $base, $mod, array $opt)
         if ($diffNew) audit('update', $d['table'], $id, $diffOld, $diffNew, p('_reason') ?: null);
     }
     if (isset($d['after_save'])) $d['after_save']($id, $data, $old);
+    if ($isNew && isset($d['notify_new']) && function_exists('notify_super')) {
+        $rec = row('SELECT * FROM ' . $d['table'] . ' WHERE id=?', [$id]);
+        $title = 'New ' . strtolower($d['one']) . ': ' . ($rec ? ent_row_title($d, $rec) : '#' . $id);
+        if (!empty($d['notify_new'][0])) notify_role($d['notify_new'][0], $title, ent_url($d['key'], $id), $d['notify_new'][1] ?? 'lead');
+        notify_super($title, ent_url($d['key'], $id), 'entry');
+    }
     flash($d['one'] . ($isNew ? ' created.' : ' updated.'));
     redirect(u($base, ['a' => 'view', 'id' => $id]));
 }

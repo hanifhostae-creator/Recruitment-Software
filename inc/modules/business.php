@@ -78,7 +78,7 @@ function payslip($r)
 {
     $e = row('SELECT * FROM employees WHERE id=?', [$r['employee_id']]);
     $abs = round(((float)$r['basic'] / 30) * (float)$r['unpaid_days'], 2);
-    card_open(icon('file-text', 17) . ' Payslip · ' . e($r['period']), '<button class="btn ghost sm no-print" onclick="window.print()">' . icon('printer', 14) . ' Print</button>', 'payslip');
+    card_open(icon('file-text', 17) . ' Payslip · ' . e($r['period']), '<button class="btn ghost sm no-print" data-print>' . icon('printer', 14) . ' Print</button>', 'payslip');
     echo '<p><b>' . e(setting('company_name')) . '</b><br><span class="muted small">' . e($e['name'] ?? '') . ' · ' . e($e['designation'] ?? '') . ' · ' . e($e['department'] ?? '') . '</span></p><table class="table compact"><tbody>'
         . '<tr><td>Basic salary</td><td class="num">' . money($r['basic']) . '</td></tr><tr><td>Allowances</td><td class="num">' . money($r['allowances']) . '</td></tr><tr><td>Overtime (approved)</td><td class="num">' . money($r['overtime_amount']) . '</td></tr>'
         . '<tr><td>Unpaid leave / absence (' . num($r['unpaid_days']) . ' days)</td><td class="num">− ' . money($abs) . '</td></tr><tr><td>Other deductions</td><td class="num">− ' . money($r['deductions']) . '</td></tr></tbody><tfoot><tr><td>Net pay</td><td class="num">' . money($r['net']) . '</td></tr></tfoot></table>';
@@ -110,7 +110,7 @@ mod('hrm', ['label' => 'HRM', 'icon' => 'id', 'area' => 'People', 'order' => 1, 
 mod('selfservice', ['label' => 'My HR', 'icon' => 'user', 'area' => 'Home', 'order' => 5, 'page' => 'myhr.php', 'desc' => 'Your own employee record, leave and payslips.']);
 
 // ================================================================ CRM
-ent('leads', ['label' => 'Leads', 'prefix' => 'LEAD', 'title' => 'name', 'icon' => 'user-plus', 'bl' => 'General', 'dupe' => ['phone', 'email'],
+ent('leads', ['notify_new' => ['Marketing', 'lead'], 'label' => 'Leads', 'prefix' => 'LEAD', 'title' => 'name', 'icon' => 'user-plus', 'bl' => 'General', 'dupe' => ['phone', 'email'],
     'fields' => ['name' => ['Contact name', 'text', 'req'], 'company' => ['Company', 'text'], 'phone' => ['Phone', 'phone'], 'email' => ['Email', 'email'], 'source' => ['Source', 'opt:sources', 'req'], 'owner' => ['Owner', 'user', 'req'],
         'interest' => ['Interested in', 'opt:enquiry_categories'], 'status' => $S('New|Contacted|Qualified|Proposal|Won|Lost'), 'next_follow_up' => ['Next follow-up', 'date'], 'converted_company_id' => ['Converted to client', 'ref:companies', 'hide', 'norel' => true], 'notes' => ['Notes', 'textarea']],
     'list' => ['ref_no', 'name', 'company', 'source', 'owner', 'status', 'next_follow_up'], 'filters' => ['status', 'source', 'owner'],
@@ -162,7 +162,7 @@ ent('pos_sale_items', ['label' => 'Sale Items', 'one' => 'Sale item', 'title' =>
     'after_save' => function ($id, $d, $old) { q('UPDATE pos_sales SET total=(SELECT COALESCE(SUM(line_total),0) FROM pos_sale_items WHERE sale_id=? AND archived=0) WHERE id=?', [$d['sale_id'], $d['sale_id']]); if (!$old) q('UPDATE pos_products SET stock=COALESCE(stock,0)-? WHERE id=?', [$d['qty'], $d['product_id']]); }]);
 mod('pos', ['label' => 'POS', 'icon' => 'cart', 'area' => 'Sales & Marketing', 'order' => 3, 'desc' => 'Sales per business line, sale items, barcode labels and top-selling items.',
     'tabs' => ['sales' => 'pos_sales', 'items' => 'pos_sale_items', 'products' => 'pos_products',
-        'labels' => ['label' => 'Barcode labels', 'fn' => function ($base, $mod) { echo '<p class="no-print"><button class="btn ghost" onclick="window.print()">' . icon('printer', 15) . ' Print labels</button></p><div class="label-grid">'; foreach (rows('SELECT * FROM pos_products WHERE archived=0 AND active=1') as $p) echo '<div class="lbl"><b>' . e($p['name']) . '</b>' . barcode39($p['barcode']) . '<div>' . e($p['barcode']) . ' · ' . money($p['price']) . '</div></div>'; echo '</div>'; }],
+        'labels' => ['label' => 'Barcode labels', 'fn' => function ($base, $mod) { echo '<p class="no-print"><button class="btn ghost" data-print>' . icon('printer', 15) . ' Print labels</button></p><div class="label-grid">'; foreach (rows('SELECT * FROM pos_products WHERE archived=0 AND active=1') as $p) echo '<div class="lbl"><b>' . e($p['name']) . '</b>' . barcode39($p['barcode']) . '<div>' . e($p['barcode']) . ' · ' . money($p['price']) . '</div></div>'; echo '</div>'; }],
         'top' => ['label' => 'Top selling', 'fn' => function ($base, $mod) { $t = []; foreach (rows('SELECT p.name, SUM(i.qty) q, SUM(i.line_total) v FROM pos_sale_items i JOIN pos_products p ON p.id=i.product_id WHERE i.archived=0 GROUP BY p.id ORDER BY v DESC LIMIT 10') as $r) $t[$r['name']] = (float)$r['v']; $bl = []; foreach (rows('SELECT business_line k, SUM(total) v FROM pos_sales WHERE archived=0 GROUP BY k') as $r) $bl[$r['k']] = (float)$r['v']; echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>Top-selling items (value)</h3></div>' . chart_bars($t, 'money') . '</div><div class="card"><div class="card-h"><h3>Sales by business line</h3></div>' . chart_donut($bl) . '</div></div>'; }]]]);
 
 // ================================================================ ERP & Operations
@@ -254,7 +254,7 @@ ent('change_requests', ['label' => 'Change Requests', 'one' => 'Change request',
 ent('client_approvals', ['label' => 'Client Approvals', 'one' => 'Client approval', 'title' => 'item', 'icon' => 'check-circle',
     'fields' => ['it_project_id' => ['IT project', 'ref:it_projects', 'req'], 'item' => ['Item for approval', 'text', 'req'], 'approved_by' => ['Approved by (client)', 'text'], 'approval_date' => ['Date', 'date'], 'status' => $S('Pending|Approved|Changes Requested'), 'notes' => ['Notes', 'text']],
     'list' => ['it_project_id', 'item', 'approved_by', 'approval_date', 'status']]);
-ent('support_tickets', ['label' => 'Support Tickets', 'one' => 'Ticket', 'prefix' => 'TKT', 'title' => 'subject', 'title_ref' => true, 'icon' => 'headphones',
+ent('support_tickets', ['notify_new' => ['IT', 'task'], 'label' => 'Support Tickets', 'one' => 'Ticket', 'prefix' => 'TKT', 'title' => 'subject', 'title_ref' => true, 'icon' => 'headphones',
     'fields' => ['subject' => ['Subject', 'text', 'req'], 'company_id' => ['Client', 'ref:companies'], 'it_project_id' => ['IT project', 'ref:it_projects'], 'requester' => ['Requester', 'text'], 'priority' => ['Priority', 'enum:Low|Normal|High|Urgent', 'default' => 'Normal'], 'assigned_to' => ['Assigned to', 'user'], 'status' => $S('Open|In Progress|Waiting|Resolved|Closed'), 'details' => ['Details', 'textarea', 'req'], 'resolution' => ['Resolution', 'textarea']],
     'list' => ['ref_no', 'subject', 'company_id', 'priority', 'assigned_to', 'status'], 'filters' => ['status', 'priority', 'assigned_to']]);
 ent('content_calendar', ['label' => 'Campaign & Content Calendar', 'one' => 'Content item', 'title' => 'title', 'icon' => 'calendar', 'bl' => 'Marketing', 'order' => 'publish_date',
@@ -268,13 +268,13 @@ mod('it', ['label' => 'IT & Digital', 'icon' => 'code', 'area' => 'Operations', 
 ent('travel_packages', ['label' => 'Packages', 'one' => 'Package', 'prefix' => 'PKG', 'title' => 'name', 'icon' => 'globe',
     'fields' => ['name' => ['Package', 'text', 'req'], 'destination' => ['Destination', 'text', 'req'], 'days' => ['Days', 'int'], 'price' => ['Selling price (per person)', 'money', 'req'], 'cost' => ['Supplier cost (per person)', 'money'], 'inclusions' => ['Inclusions', 'textarea'], 'status' => $S('Active|Inactive')],
     'list' => ['ref_no', 'name', 'destination', 'days', 'price', 'status'], 'cols' => ['Margin' => function ($r) { return $r['price'] ? round(($r['price'] - $r['cost']) / $r['price'] * 100) . '%' : ''; }]]);
-ent('travel_enquiries', ['label' => 'Travel Enquiries', 'one' => 'Travel enquiry', 'prefix' => 'TEQ', 'title' => 'name', 'icon' => 'phone',
+ent('travel_enquiries', ['notify_new' => ['Travel Team', 'lead'], 'label' => 'Travel Enquiries', 'one' => 'Travel enquiry', 'prefix' => 'TEQ', 'title' => 'name', 'icon' => 'phone',
     'fields' => ['name' => ['Customer', 'text', 'req'], 'phone' => ['Phone', 'phone', 'req'], 'email' => ['Email', 'email'], 'package_id' => ['Package', 'ref:travel_packages'], 'destination' => ['Destination', 'text'], 'travel_date' => ['Travel date', 'date'], 'pax' => ['Travellers', 'int', 'default' => 1], 'source' => ['Source', 'opt:sources'], 'status' => $S('New|Quoted|Booked|Lost'), 'assigned_to' => ['Assigned to', 'user'], 'notes' => ['Notes', 'textarea']],
     'list' => ['ref_no', 'name', 'destination', 'travel_date', 'pax', 'status', 'assigned_to'], 'filters' => ['status', 'assigned_to']]);
 ent('travel_quotations', ['label' => 'Quotations', 'one' => 'Quotation', 'prefix' => 'TQ', 'icon' => 'file-text',
     'fields' => ['enquiry_id' => ['Enquiry', 'ref:travel_enquiries', 'req'], 'package_id' => ['Package', 'ref:travel_packages'], 'amount' => ['Quoted amount', 'money', 'req'], 'valid_until' => ['Valid until', 'date'], 'status' => $S('Sent|Accepted|Rejected|Expired'), 'details' => ['Details', 'textarea']],
     'list' => ['ref_no', 'enquiry_id', 'package_id', 'amount', 'valid_until', 'status']]);
-ent('travel_bookings', ['label' => 'Bookings', 'one' => 'Booking', 'prefix' => 'TB', 'title' => 'customer', 'title_ref' => true, 'icon' => 'plane', 'financial' => true,
+ent('travel_bookings', ['notify_new' => [null], 'label' => 'Bookings', 'one' => 'Booking', 'prefix' => 'TB', 'title' => 'customer', 'title_ref' => true, 'icon' => 'plane', 'financial' => true,
     'fields' => ['customer' => ['Customer', 'text', 'req'], 'phone' => ['Phone', 'phone'], 'package_id' => ['Package', 'ref:travel_packages'], 'enquiry_id' => ['Enquiry', 'ref:travel_enquiries'], 'travel_date' => ['Travel date', 'date', 'req'], 'pax' => ['Travellers', 'int', 'default' => 1],
         'sale_price' => ['Total selling price', 'money', 'req'], 'supplier' => ['Supplier', 'text'], 'supplier_cost' => ['Total supplier cost', 'money'], 'status' => $S('Confirmed|Travelled|Cancelled')],
     'list' => ['ref_no', 'customer', 'package_id', 'travel_date', 'pax', 'sale_price', 'status'], 'filters' => ['status'],
@@ -296,7 +296,7 @@ mod('travel', ['label' => 'Travel & Tour', 'icon' => 'plane', 'area' => 'Travel 
     }], 'packages' => 'travel_packages', 'enquiries' => 'travel_enquiries', 'quotations' => 'travel_quotations', 'bookings' => 'travel_bookings', 'support' => 'travel_support']]);
 
 // ================================================================ Marriage Paybook
-ent('paybook_files', ['label' => 'Paybook Files', 'one' => 'Paybook file', 'prefix' => 'PB', 'title' => 'client_name', 'title_ref' => true, 'icon' => 'heart', 'financial' => true,
+ent('paybook_files', ['notify_new' => [null], 'label' => 'Paybook Files', 'one' => 'Paybook file', 'prefix' => 'PB', 'title' => 'client_name', 'title_ref' => true, 'icon' => 'heart', 'financial' => true,
     'fields' => ['client_name' => ['Client name', 'text', 'req'], 'phone' => ['Phone', 'phone', 'req'], 'email' => ['Email', 'email'], 'service' => ['Service', 'text', 'req'], 'agreed_value' => ['Agreed value', 'money', 'req'], 'source' => ['Marketing source', 'opt:sources', 'req'], 'owner' => ['Owner', 'user'], 'status' => $S('Open|In Progress|Completed|Cancelled'), 'notes' => ['Notes', 'textarea']],
     'list' => ['ref_no', 'client_name', 'service', 'agreed_value', 'source', 'owner', 'status'], 'filters' => ['status', 'source', 'owner'],
     'cols' => ['Balance' => function ($r) { return money($r['agreed_value'] - paid_total('paybook_files', $r['id']) + paid_total('paybook_files', $r['id'], 'out')); }],
@@ -314,7 +314,7 @@ ent('paybook_refunds', ['label' => 'Refund Requests', 'one' => 'Refund request',
     'actions' => ['confirm' => ['label' => 'Finance confirmation', 'icon' => 'shield', 'perm' => 'finance', 'show' => function ($r) { return $r['status'] === 'Requested'; },
         'form' => function ($r) { echo '<div class="grid-form"><div class="fld"><label>Decision</label><select name="decision"><option>Confirm and pay refund</option><option>Reject</option></select></div><div class="fld"><label>Method</label><select name="method">' . implode('', array_map(function ($m) { return '<option>' . e($m) . '</option>'; }, options('payment_methods'))) . '</select></div></div><div class="form-actions"><button class="btn">Save</button></div>'; },
         'do' => function ($r) { if (p('decision') === 'Reject') { upd('paybook_refunds', $r['id'], ['status' => 'Rejected', 'confirmed_by' => me()['id']]); audit('reject', 'paybook_refunds', $r['id']); return ['msg' => 'Refund rejected.']; } record_payment('paybook_files', $r['file_id'], $r['amount'], ['direction' => 'out', 'method' => p('method'), 'pay_type' => 'Refund', 'note' => 'Refund ' . $r['ref_no'] . ': ' . $r['reason']]); upd('paybook_refunds', $r['id'], ['status' => 'Confirmed by Finance', 'confirmed_by' => me()['id']]); audit('confirm', 'paybook_refunds', $r['id']); return ['msg' => 'Refund confirmed by Finance and paid.']; }]]]);
-mod('paybook', ['label' => 'Marriage Paybook', 'icon' => 'heart', 'area' => 'Travel & Services', 'order' => 2, 'desc' => 'Files with agreed value, payments and balances, work tasks, communications, consultations, refunds (Finance confirmation) and marketing conversion.',
+mod('paybook', ['label' => 'Marriage Bureau', 'icon' => 'heart', 'area' => 'Travel & Services', 'order' => 2, 'desc' => 'Files with agreed value, payments and balances, work tasks, communications, consultations, refunds (Finance confirmation) and marketing conversion.',
     'tabs' => ['files' => 'paybook_files', 'tasks' => 'paybook_tasks', 'comms' => 'paybook_comms', 'consult' => 'paybook_consultations', 'refunds' => 'paybook_refunds',
         'conversion' => ['label' => 'Marketing conversion', 'fn' => function ($base, $mod) { $s = []; foreach (rows('SELECT source k, COUNT(*) n FROM paybook_files WHERE archived=0 GROUP BY k ORDER BY n DESC') as $r) $s[$r['k'] ?: 'Unknown'] = (int)$r['n']; echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>Paybook files by marketing source</h3></div>' . chart_bars($s) . '</div><div class="card"><div class="card-h"><h3>Share</h3></div>' . chart_donut($s) . '</div></div>'; }]]]);
 
@@ -356,7 +356,7 @@ seeder(function () {
     $tt = ins('training_types', $b + ['name' => 'Customer service']);
     $tr = ins('trainers', $b + ['name' => 'Dr. Nadia Karim', 'expertise' => 'Customer experience']);
     ins('trainings', $b + ['training_type_id' => $tt, 'trainer_id' => $tr, 'employee_id' => $emp['reception'], 'training_date' => date('Y-m-d', strtotime('+7 days')), 'status' => 'Planned']);
-    foreach (['admin', 'hr', 'reception', 'finance'] as $i => $n) { q('INSERT OR IGNORE INTO staff_attendance (user_id, day, check_in, check_out, marked_by) VALUES (?,?,?,?,?)', [$u($n), date('Y-m-d', strtotime('-1 day')), date('Y-m-d', strtotime('-1 day')) . ' 0' . (8 + $i % 2) . ':5' . $i . ':00', date('Y-m-d', strtotime('-1 day')) . ' 18:0' . $i . ':00', $u($n)]); }
+    foreach (['admin', 'hr', 'reception', 'finance'] as $i => $n) { db_insert_ignore('staff_attendance', ['user_id' => $u($n), 'day' => date('Y-m-d', strtotime('-1 day')), 'check_in' => date('Y-m-d', strtotime('-1 day')) . ' 0' . (8 + $i % 2) . ':5' . $i . ':00', 'check_out' => date('Y-m-d', strtotime('-1 day')) . ' 18:0' . $i . ':00', 'marked_by' => $u($n)]); }
 
     $l1 = ins('leads', $b + ['ref_no' => next_number('LEAD'), 'name' => 'Ahmed Al Hashimi', 'company' => 'Desert Rose Hotels', 'phone' => '0509990001', 'email' => 'ahmed@desertrose.example', 'source' => 'Referral', 'owner' => $u('marketing'), 'interest' => 'Hire Staff', 'status' => 'Qualified', 'next_follow_up' => date('Y-m-d', strtotime('-1 day')), 'business_line' => 'Outside Hiring']);
     ins('leads', $b + ['ref_no' => next_number('LEAD'), 'name' => 'Sara Thomas', 'company' => 'Bright Smile Dental', 'phone' => '0509990002', 'source' => 'Website', 'owner' => $u('marketing'), 'interest' => 'Web Development', 'status' => 'New', 'next_follow_up' => date('Y-m-d', strtotime('+2 days')), 'business_line' => 'General']);
@@ -411,4 +411,4 @@ seeder(function () {
     record_payment('paybook_files', $pb, 3000, ['method' => 'Cash', 'pay_type' => 'Client Payment']);
     ins('paybook_tasks', $b + ['file_id' => $pb, 'task' => 'Book venue', 'assignee' => $u('admin'), 'due_date' => date('Y-m-d', strtotime('+5 days')), 'status' => 'In Progress']);
     ins('paybook_consultations', $b + ['file_id' => $pb, 'kind' => 'Consultation', 'meet_date' => date('Y-m-d 17:00:00', strtotime('-4 days')), 'by_user' => $u('admin'), 'notes' => 'Discussed guest list and budget.']);
-}, 35);
+}, 35, true);

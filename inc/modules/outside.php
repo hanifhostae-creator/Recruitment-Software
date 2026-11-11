@@ -3,7 +3,7 @@
 
 const WORKER_STAGES = ['Submitted', 'Interviewed', 'Selected', 'Documentation', 'Visa Processing', 'Ready to Mobilise', 'Joined'];
 
-ent('companies', ['label' => 'Client Companies', 'one' => 'Company', 'prefix' => 'CO', 'title' => 'display_name', 'icon' => 'building', 'dupe' => ['legal_name'],
+ent('companies', ['notify_new' => [null], 'label' => 'Client Companies', 'one' => 'Company', 'prefix' => 'CO', 'title' => 'display_name', 'icon' => 'building', 'dupe' => ['legal_name'],
     'fields' => [
         'legal_name' => ['Legal name', 'text', 'req'], 'display_name' => ['Display name', 'text', 'req'], 'industry' => ['Industry', 'opt:industries'],
         'branches' => ['Branches and sites', 'textarea'], 'contact_person' => ['Main contact', 'text'], 'phone' => ['Phone', 'phone'], 'email' => ['Email', 'email'], 'address' => ['Address', 'text'],
@@ -22,7 +22,7 @@ ent('client_users', ['label' => 'Client Portal Users', 'one' => 'Client user', '
         'do' => function ($r) { list($url, $em, $addr) = reset_send('client', $r['id'], me()['id'], 'An administrator has sent you a password reset link for your RH Management account.'); return ['msg' => ($em ? 'Reset link emailed to ' . e($addr) . '. ' : 'No email sent (' . ($addr ? e($GLOBALS['mail_error'] ?? 'email failed') : 'no email address on this account') . '). ') . 'Link (valid 60 minutes): <a href="' . e($url) . '">' . e($url) . '</a>']; }]],
     'before_save' => function (&$d, $old) { $d['username'] = strtolower(trim($d['username'])); if (val('SELECT id FROM client_users WHERE lower(username)=? AND id<>?', [$d['username'], $old['id'] ?? 0])) return 'This username is already used.'; return null; }]);
 
-ent('demands', ['label' => 'Demands', 'one' => 'Demand', 'prefix' => 'DEM', 'title' => 'position', 'title_ref' => true, 'icon' => 'clipboard', 'bl' => 'Outside Hiring',
+ent('demands', ['notify_new' => ['Outside Operations', 'approval'], 'label' => 'Demands', 'one' => 'Demand', 'prefix' => 'DEM', 'title' => 'position', 'title_ref' => true, 'icon' => 'clipboard', 'bl' => 'Outside Hiring',
     'fields' => [
         'company_id' => ['Client company', 'ref:companies', 'req'], 'position' => ['Job position', 'opt:positions', 'req'], 'quantity' => ['Quantity requested', 'int', 'req'],
         'job_description' => ['Job description', 'textarea'], 'skills' => ['Skills and experience', 'textarea'], 'salary' => ['Salary (AED)', 'money'], 'benefits' => ['Benefits and terms', 'text'],
@@ -434,4 +434,4 @@ seeder(function () {
     ins('issues', $b + ['ref_no' => next_number('ISS'), 'subject' => 'Worker did not travel — replacement needed', 'party' => 'Worker', 'demand_id' => $d3, 'worker_id' => $mary, 'category' => 'Replacement Needed', 'severity' => 'High', 'owner' => $u('ops'), 'due_date' => date('Y-m-d', strtotime('+3 days')), 'status' => 'In Progress', 'details' => 'Mary Akinyi withdrew because of a family emergency.', 'resolution' => 'Replacement John Ochieng arranged.']);
     ins('agent_comms', $b + ['agent_id' => $ktm, 'subject' => 'Batch 2 timeline', 'message' => 'Agent confirms 4 more masons by next week.', 'channel' => 'WhatsApp', 'follow_up' => date('Y-m-d', strtotime('+3 days')), 'assigned_to' => $u('ops'), 'status' => 'Open']);
     ins('client_feedback', $b + ['company_id' => $gulf, 'demand_id' => $d1, 'rating' => 4, 'feedback' => 'Good quality masons; please speed up visas.', 'source' => 'Phone']);
-}, 30);
+}, 30, true);

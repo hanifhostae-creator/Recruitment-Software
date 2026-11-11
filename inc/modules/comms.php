@@ -2,7 +2,7 @@
 // Module 3 — Communication & content: WhatsApp, messenger, calendar, meetings, email & notification templates,
 // CMS, media, knowledge base, FAQ, newsletter, support dashboard, company goals.
 
-ent('wa_messages', ['label' => 'WhatsApp Inbox', 'one' => 'WhatsApp enquiry', 'prefix' => 'WA', 'title' => 'contact_name', 'title_ref' => true, 'icon' => 'chat', 'order' => "CASE status WHEN 'New' THEN 0 WHEN 'Needs Review' THEN 1 ELSE 2 END, id DESC",
+ent('wa_messages', ['notify_new' => ['Marketing', 'lead'], 'label' => 'WhatsApp Inbox', 'one' => 'WhatsApp enquiry', 'prefix' => 'WA', 'title' => 'contact_name', 'title_ref' => true, 'icon' => 'chat', 'order' => "CASE status WHEN 'New' THEN 0 WHEN 'Needs Review' THEN 1 ELSE 2 END, id DESC",
     'fields' => ['from_number' => ['From number', 'phone', 'req'], 'contact_name' => ['Contact name', 'text'], 'body' => ['Message', 'textarea', 'req'], 'received_at' => ['Received at', 'datetime', 'default' => date('Y-m-d H:i')],
         'channel' => ['Arrived via', 'enum:Webhook|Manual entry', 'default' => 'Manual entry'], 'category' => ['Category', 'opt:enquiry_categories'], 'status' => ['Status', 'enum:New|Needs Review|Assigned|Replied|Closed', 'default' => 'New'],
         'assigned_to' => ['Assigned to', 'user'], 'candidate_id' => ['Linked candidate', 'ref:candidates'], 'company_id' => ['Linked client', 'ref:companies'], 'demand_id' => ['Linked demand', 'ref:demands'],
@@ -48,7 +48,7 @@ mod('whatsapp', ['label' => 'WhatsApp', 'icon' => 'chat', 'area' => 'Communicati
             require_action($mod, 'config');
             if (p('disable')) { set_setting('wa_enabled', '0'); audit('wa-disable', 'settings'); flash('WhatsApp integration switched off.'); redirect($base); }
             if (!p('wa_token') || !p('wa_phone_id')) { flash('Paste both the access token and the Phone Number ID.', 'bad'); redirect($base); }
-            set_setting('wa_token', p('wa_token')); set_setting('wa_phone_id', p('wa_phone_id')); set_setting('wa_provider', p('wa_provider'));
+            if (strpos(p('wa_token'), '••') === false) secret_put('wa_token', p('wa_token')); set_setting('wa_phone_id', p('wa_phone_id')); set_setting('wa_provider', p('wa_provider'));
             if (!setting('wa_verify_token')) set_setting('wa_verify_token', bin2hex(random_bytes(12)));
             set_setting('wa_enabled', '1');
             audit('wa-enable', 'settings', null, null, ['provider' => p('wa_provider'), 'phone_id' => p('wa_phone_id')]);
@@ -60,7 +60,7 @@ mod('whatsapp', ['label' => 'WhatsApp', 'icon' => 'chat', 'area' => 'Communicati
             echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>' . icon('settings', 17) . ' Provider API details</h3>' . badge($on ? 'Active' : 'Not connected') . '</div><form method="post">' . csrf_field()
                 . '<div class="fld" style="margin-bottom:12px"><label>Provider</label><select name="wa_provider">';
             foreach (['Meta (WhatsApp Cloud API)', '360dialog', 'Interakt', 'Other'] as $pv) echo '<option' . (setting('wa_provider') === $pv ? ' selected' : '') . '>' . e($pv) . '</option>';
-            echo '</select></div><div class="fld" style="margin-bottom:12px"><label>API key / access token *</label><input type="password" name="wa_token" value="' . e(setting('wa_token') ? '••••••••' . substr(setting('wa_token'), -4) : '') . '" placeholder="Paste the access token" autocomplete="off"></div>'
+            echo '</select></div><div class="fld" style="margin-bottom:12px"><label>API key / access token *</label><input type="password" name="wa_token" value="' . e(secret_get('wa_token') ? '••••••••' . substr(secret_get('wa_token'), -4) : '') . '" placeholder="Paste the access token" autocomplete="off"></div>'
                 . '<div class="fld" style="margin-bottom:12px"><label>Phone Number ID *</label><input name="wa_phone_id" value="' . e(setting('wa_phone_id')) . '"></div><div class="form-actions"><button class="btn">Save and switch on</button>' . ($on ? ' <button class="btn ghost danger" name="disable" value="1">Switch off</button>' : '') . '</div></form></div>';
             echo '<div class="card"><div class="card-h"><h3>' . icon('link', 17) . ' Webhook (enter these at the provider)</h3></div>';
             if ($on) echo '<label>Webhook URL</label><div class="copybox"><input id="whurl" readonly value="' . e($url) . '"><button type="button" class="btn ghost" data-copy="whurl">Copy</button></div><label style="margin-top:12px">Verify token</label><div class="copybox"><input id="whtok" readonly value="' . e(setting('wa_verify_token')) . '"><button type="button" class="btn ghost" data-copy="whtok">Copy</button></div><p class="muted small" style="margin-top:10px">In the provider dashboard (Meta, 360dialog, Interakt…) paste the URL and token and subscribe to the <code>messages</code> webhook.</p>';
@@ -121,7 +121,7 @@ seeder(function () {
     $dir = ROOT . '/uploads/cv';
     if (!is_dir($dir)) @mkdir($dir, 0775, true);
     if (!is_file($dir . '/sample-cv.pdf')) @file_put_contents($dir . '/sample-cv.pdf', demo_pdf('Sample CV - RH Management demo'));
-}, 60);
+}, 60, true);
 
 /** Minimal valid one-page PDF (used for demo CV files). */
 function demo_pdf($text)

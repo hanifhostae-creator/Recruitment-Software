@@ -1,7 +1,8 @@
 <?php
 // Core: home screens, tasks, documents, issues, control centre, demo roles and users.
 
-opt_defaults('business_lines', ['Outside Hiring', 'Inside Hiring', 'Marketing', 'Chairman Services', 'General']);
+opt_defaults('business_lines', ['Inside Hiring', 'Outside Hiring', 'Travel & Tour', 'Marriage Bureau', 'Marketing', 'IT & Business Development', 'Chairman Services', 'General']);
+opt_defaults('staff_teams', ['Management', 'Inside Hiring', 'Deployment', 'Outside Hiring', 'Travel & Tour', 'Marketing', 'Marriage Bureau', 'IT & Business Development', 'Accounts']);
 opt_defaults('positions', ['Driver', 'Heavy Driver', 'Cleaner', 'Security Guard', 'Electrician', 'Plumber', 'Mason', 'Carpenter', 'Steel Fixer', 'Welder', 'Painter', 'General Helper', 'Cook', 'Waiter', 'Housemaid', 'Nanny', 'Sales Executive', 'Accountant', 'Receptionist', 'Nurse', 'Mechanic', 'Office Boy', 'Storekeeper', 'Barista']);
 opt_defaults('nationalities', ['Pakistan', 'India', 'Bangladesh', 'Nepal', 'Sri Lanka', 'Philippines', 'Indonesia', 'Kenya', 'Uganda', 'Ghana', 'Nigeria', 'Ethiopia', 'Egypt', 'Cameroon', 'Sierra Leone', 'United Arab Emirates']);
 opt_defaults('countries', ['United Arab Emirates', 'Pakistan', 'India', 'Bangladesh', 'Nepal', 'Sri Lanka', 'Philippines', 'Kenya', 'Uganda', 'Ghana', 'Nigeria', 'Ethiopia', 'Egypt', 'Saudi Arabia', 'Qatar', 'Oman']);
@@ -122,7 +123,7 @@ function default_roles()
     return [
         ['Super Admin', 'All modules, Admin Control Centre and the full audit trail.', [], [], 1],
         ['Reception', 'Registers walk-in candidates, assigns HR, runs queues and manual attendance.', ['reception', 'candidates', 'whatsapp'], ['reception' => ['add', 'edit'], 'candidates' => ['add', 'edit', 'assign'], 'whatsapp' => ['add', 'edit']], 0],
-        ['HR', 'Interviews, file decisions, inside files and HR productivity.', ['candidates', 'inside', 'fees', 'recruitment', 'hrm', 'reception', 'marketing'], ['candidates' => ['add', 'edit', 'approve', 'assign', 'export'], 'inside' => ['add', 'edit', 'approve', 'export'], 'fees' => ['add', 'edit'], 'recruitment' => ['add', 'edit', 'approve', 'export'], 'hrm' => ['add', 'edit', 'approve', 'export'], 'reception' => ['add', 'edit'], 'marketing' => []], 0],
+        ['HR', 'Candidate entry, interviews, file decisions and own progress. No staff attendance.', ['candidates', 'inside', 'fees', 'recruitment'], ['candidates' => ['add', 'edit', 'approve', 'assign', 'export'], 'inside' => ['add', 'edit', 'approve'], 'fees' => [], 'recruitment' => ['add', 'edit', 'approve']], 0],
         ['Deployment', 'Teams, interview locations, deployment payments, final outcomes and file closure.', ['deployment', 'candidates', 'inside'], ['deployment' => ['add', 'edit', 'assign', 'export'], 'candidates' => ['edit', 'assign'], 'inside' => []], 0],
         ['Finance', 'Ledgers, receipts, reconciliation, accounting and invoices.', ['finance', 'accounting', 'invoices', 'fees', 'inside', 'reports', 'paybook', 'travel'], ['finance' => ['add', 'edit', 'finance', 'approve', 'export'], 'accounting' => ['add', 'edit', 'finance', 'export'], 'invoices' => ['add', 'edit', 'finance', 'export'], 'fees' => ['add', 'edit', 'finance', 'export'], 'inside' => ['finance', 'export'], 'paybook' => ['finance'], 'travel' => ['finance']], 0],
         ['Marketing', 'Vacancy board, campaigns, posts, enquiries and CRM leads.', ['marketing', 'crm', 'whatsapp', 'cms', 'media'], ['marketing' => ['add', 'edit', 'export'], 'crm' => $std, 'whatsapp' => ['add', 'edit'], 'cms' => ['add', 'edit'], 'media' => ['add', 'edit']], 0],
@@ -136,23 +137,33 @@ seeder(function () {
     foreach ([['company_name', 'RH Business Solutions & Marketing Management'], ['company_short', 'RH Management'], ['currency', 'AED'], ['company_phone', '+971 555843001'],
         ['company_email', 'info@rhmanagements.com'], ['company_address', 'Dubai, United Arab Emirates'], ['leave_entitlement', '30'], ['smtp_sec', 'ssl'], ['smtp_port', '465']] as $s) set_setting($s[0], $s[1]);
     foreach (default_roles() as $r) ins('roles', ['name' => $r[0], 'description' => $r[1], 'modules' => json_encode($r[2]), 'actions' => json_encode((object)$r[3]), 'is_super' => $r[4], 'created_at' => now()]);
+    set_setting('upgrade_v11', now());
+    set_setting('upgrade_v12', now());
+    if (!DEMO_DATA) return; // live install: the first visit shows the "Create the Super Admin" screen (setup.php)
     $role = function ($n) { return (int)val('SELECT id FROM roles WHERE name=?', [$n]); };
     $pw = password_hash('rh@123', PASSWORD_DEFAULT);
-    foreach ([['admin', 'Ateeq Rehman', 'Super Admin', 'admin@rhmanagements.com'], ['hr', 'Sana Malik', 'HR', 'hr@rhmanagements.com'], ['deploy', 'Imran Qureshi', 'Deployment', 'deploy@rhmanagements.com'],
-        ['finance', 'Farah Ahmed', 'Finance', 'finance@rhmanagements.com'], ['reception', 'Ayesha Noor', 'Reception', 'reception@rhmanagements.com'], ['marketing', 'Bilal Hassan', 'Marketing', 'marketing@rhmanagements.com'],
-        ['ops', 'Omar Siddiqui', 'Outside Operations', 'ops@rhmanagements.com'], ['travel', 'Mariam Yusuf', 'Travel Team', 'travel@rhmanagements.com'], ['it', 'Zain Ali', 'IT / Digital', 'it@rhmanagements.com']] as $u)
-        ins('users', ['username' => $u[0], 'name' => $u[1], 'email' => $u[3], 'role_id' => $role($u[2]), 'password_hash' => $pw, 'must_change' => 1, 'active' => 1, 'created_at' => now()]);
+    foreach ([['admin', 'Ateeq Rehman', 'Super Admin', 'admin@rhmanagements.com', 'Management'], ['hr', 'Sana Malik', 'HR', 'hr@rhmanagements.com', 'Inside Hiring'], ['deploy', 'Imran Qureshi', 'Deployment', 'deploy@rhmanagements.com', 'Deployment'],
+        ['finance', 'Farah Ahmed', 'Finance', 'finance@rhmanagements.com', 'Accounts'], ['reception', 'Ayesha Noor', 'Reception', 'reception@rhmanagements.com', 'Inside Hiring'], ['marketing', 'Bilal Hassan', 'Marketing', 'marketing@rhmanagements.com', 'Marketing'],
+        ['ops', 'Omar Siddiqui', 'Outside Operations', 'ops@rhmanagements.com', 'Outside Hiring'], ['travel', 'Mariam Yusuf', 'Travel Team', 'travel@rhmanagements.com', 'Travel & Tour'], ['it', 'Zain Ali', 'IT / Digital', 'it@rhmanagements.com', 'IT & Business Development']] as $u)
+        ins('users', ['username' => $u[0], 'name' => $u[1], 'email' => $u[3], 'role_id' => $role($u[2]), 'team' => $u[4], 'password_hash' => $pw, 'must_change' => 1, 'active' => 1, 'created_at' => now()]);
 }, 1);
 
 /** Notify every active user whose role name starts with $rolePrefix (for example Reception), except the person acting. */
-function notify_role($rolePrefix, $text, $link = '')
+function notify_role($rolePrefix, $text, $link = '', $kind = 'system')
 {
     foreach (rows('SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND r.name LIKE ?', [$rolePrefix . '%']) as $x)
-        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link);
+        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link, $kind);
+}
+/** Notify every Super Admin (used for "new entry" and "payment received" alerts on the admin dashboard). */
+function notify_super($text, $link = '', $kind = 'entry')
+{
+    foreach (rows('SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND r.is_super=1') as $x)
+        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link, $kind);
 }
 /** One-time data upgrades for installs created by an earlier version (never removes anything). */
 function apply_upgrades()
 {
+    apply_upgrades_v12();
     if (setting('upgrade_v11')) return;
     $r = row("SELECT * FROM roles WHERE name='Reception'");
     if ($r) {
@@ -161,6 +172,24 @@ function apply_upgrades()
         upd('roles', $r['id'], ['actions' => json_encode((object)$a)]);
     }
     set_setting('upgrade_v11', now());
+}
+/** v1.2: HR no longer sees staff attendance; new business lines; payments get their section; staff get a team. */
+function apply_upgrades_v12()
+{
+    if (setting('upgrade_v12')) return;
+    $r = row("SELECT * FROM roles WHERE name='HR'");
+    if ($r) {
+        $m = array_values(array_diff(json_decode($r['modules'], true) ?: [], ['hrm', 'reception', 'marketing']));
+        $a = json_decode($r['actions'], true) ?: [];
+        unset($a['hrm'], $a['reception'], $a['marketing']);
+        upd('roles', $r['id'], ['modules' => json_encode($m), 'actions' => json_encode((object)$a), 'description' => 'Candidate entry, interviews, file decisions and own progress. No staff attendance.']);
+    }
+    $have = array_column(rows("SELECT value FROM options WHERE list='business_lines'"), 'value');
+    if ($have) foreach (['Travel & Tour', 'Marriage Bureau', 'IT & Business Development'] as $i => $bl) if (!in_array($bl, $have, true)) ins('options', ['list' => 'business_lines', 'value' => $bl, 'sort' => 2 + $i, 'active' => 1]);
+    foreach (rows("SELECT id, entity, entity_id FROM payments WHERE section IS NULL OR section=''") as $pm) q('UPDATE payments SET section=? WHERE id=?', [section_of_entity($pm['entity'], $pm['entity_id']), $pm['id']]);
+    $teamOf = ['Super Admin' => 'Management', 'HR' => 'Inside Hiring', 'Reception' => 'Inside Hiring', 'Deployment' => 'Deployment', 'Finance' => 'Accounts', 'Marketing' => 'Marketing', 'Outside Operations' => 'Outside Hiring', 'Travel Team' => 'Travel & Tour', 'IT / Digital' => 'IT & Business Development'];
+    foreach (rows("SELECT u.id, r.name FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.team IS NULL OR u.team=''") as $u) if (isset($teamOf[$u['name']])) q('UPDATE users SET team=? WHERE id=?', [$teamOf[$u['name']], $u['id']]);
+    set_setting('upgrade_v12', now());
 }
 
 /** Executive KPI report section (also used on the management dashboard). */

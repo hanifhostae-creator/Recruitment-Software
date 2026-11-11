@@ -1,7 +1,9 @@
 # RH Management — Integrated Business Management System
 
 Staff dashboards and Candidate / Client / Agent portals for RH Business Solutions &
-Marketing Management (Dubai). Plain PHP + SQLite — runs on ordinary shared hosting, no build step.
+Marketing Management (Dubai). Runs on ordinary shared hosting with MySQL (or SQLite for a quick start).
+
+**Go live on Hostinger:** see `docs/DEPLOY-HOSTINGER.md`. **Progress / handover:** `docs/PROGRESS.md`.
 
 ## Run locally
 ```
@@ -9,7 +11,7 @@ php -S localhost:8000 router.php
 ```
 Open http://localhost:8000/login.php. The database (`data/rh.sqlite`) is created and filled with demo data on the first visit.
 
-## Demo logins (every password must be changed at first login)
+## Demo logins (only without inc/config.php; every password must be changed at first login, new passwords need 10+ characters)
 | Access | Login |
 |---|---|
 | Super Admin | `admin` / `rh@123` |

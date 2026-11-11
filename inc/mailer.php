@@ -5,7 +5,7 @@
 function mail_cfg()
 {
     return ['host' => trim((string)setting('smtp_host', '')), 'port' => (int)(setting('smtp_port', '465') ?: 465), 'sec' => (string)(setting('smtp_sec', 'ssl') ?: 'ssl'),
-        'user' => (string)setting('smtp_user', ''), 'pass' => (string)setting('smtp_pass', ''),
+        'user' => (string)setting('smtp_user', ''), 'pass' => secret_get('smtp_pass'),
         'from' => (string)(setting('smtp_from', '') ?: setting('company_email', 'info@rhmanagements.com')),
         'name' => (string)(setting('smtp_name', '') ?: setting('company_short', 'RH Management'))];
 }

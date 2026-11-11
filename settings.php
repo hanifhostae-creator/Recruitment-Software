@@ -18,14 +18,14 @@ if (is_post()) {
     if ($site !== '' && !preg_match('#^https?://[A-Za-z0-9.-]+(:\d+)?(/[^\s]*)?$#', $site)) { flash('The System URL must start with https:// and contain only the web address.', 'bad'); redirect('settings.php'); }
     foreach ($keys as $k => $l) set_setting($k, $k === 'site_url' ? rtrim($site, '/') : p($k));
     foreach ($mailKeys as $k => $l) set_setting($k, p($k));
-    if ((string)($_POST['smtp_pass'] ?? '') !== '') set_setting('smtp_pass', (string)$_POST['smtp_pass']);
+    if ((string)($_POST['smtp_pass'] ?? '') !== '') secret_put('smtp_pass', (string)$_POST['smtp_pass']);
     audit('settings', 'settings', null, $old, array_intersect_key($_POST, $keys + $mailKeys) + (isset($_POST['smtp_pass']) && $_POST['smtp_pass'] !== '' ? ['smtp_pass' => 'changed'] : []));
     flash('Settings saved.');
     redirect('settings.php');
 }
 page_start('Settings', 'settings');
 page_head('Settings', 'settings', 'Company details, email sending and system defaults. WhatsApp is set up under WhatsApp → Integration settings.');
-echo '<nav class="tabs"><a href="admin.php?t=options">Custom options</a><a href="admin.php?t=fields">Custom fields</a><a href="admin.php?t=archive">Archive &amp; restore</a><a href="admin.php?t=chat">Chat access</a><a href="staff.php?t=roles">Roles &amp; permissions</a><a class="on" href="settings.php">System settings</a><a href="admin.php?t=backup">Backup &amp; health</a></nav>';
+echo '<nav class="tabs"><a href="admin.php?t=options">Custom options</a><a href="admin.php?t=fields">Custom fields</a><a href="admin.php?t=archive">Archive &amp; restore</a><a href="admin.php?t=chat">Chat access</a><a href="admin.php?t=sounds">Notification sounds</a><a href="staff.php?t=roles">Roles &amp; permissions</a><a class="on" href="settings.php">System settings</a><a href="admin.php?t=backup">Backup &amp; health</a></nav>';
 echo '<form method="post" class="card form-card">' . csrf_field() . '<div class="card-h"><h3>' . icon('settings', 17) . ' Company</h3></div><div class="grid-form">';
 foreach ($keys as $k => $l) echo '<div class="fld' . ($k === 'site_url' ? ' wide' : '') . '"><label>' . e($l) . '</label><input name="' . $k . '" value="' . e(setting($k)) . '"></div>';
 echo '</div><div class="card-h" style="margin-top:22px"><h3>' . icon('mail', 17) . ' Email (password resets, candidate portal links)</h3>' . (setting('smtp_host') ? badge('SMTP configured') : badge('Not configured')) . '</div>'

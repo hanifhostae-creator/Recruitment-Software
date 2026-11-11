@@ -17,7 +17,7 @@ if (is_post() && g('a') === 'resetlink') {
 if (is_post()) {
     if ($t === 'users') {
         $id = (int)g('id');
-        $d = ['name' => p('name'), 'username' => strtolower(p('username')), 'email' => p('email'), 'phone' => p('phone'), 'role_id' => (int)p('role_id'), 'active' => p('active') ? 1 : 0];
+        $d = ['name' => p('name'), 'username' => strtolower(p('username')), 'email' => p('email'), 'phone' => p('phone'), 'role_id' => (int)p('role_id'), 'team' => in_array(p('team'), options('staff_teams'), true) ? p('team') : null, 'active' => p('active') ? 1 : 0];
         if (!$d['name'] || !$d['username'] || !$d['role_id']) { flash('Name, username and role are required.', 'bad'); redirect('staff.php?a=' . ($id ? 'edit&id=' . $id : 'new')); }
         if (val('SELECT id FROM users WHERE lower(username)=? AND id<>?', [$d['username'], $id])) { flash('This username is already used.', 'bad'); redirect('staff.php?a=' . ($id ? 'edit&id=' . $id : 'new')); }
         $pw = (string)($_POST['password'] ?? '');
@@ -60,19 +60,21 @@ $roles = rows('SELECT * FROM roles ORDER BY is_super DESC, name');
 
 if ($t === 'users') {
     if ($a === 'new' || $a === 'edit') {
-        $u = $a === 'edit' ? row('SELECT * FROM users WHERE id=?', [(int)g('id')]) : ['name' => '', 'username' => '', 'email' => '', 'phone' => '', 'role_id' => '', 'active' => 1];
+        $u = $a === 'edit' ? row('SELECT * FROM users WHERE id=?', [(int)g('id')]) : ['name' => '', 'username' => '', 'email' => '', 'phone' => '', 'role_id' => '', 'team' => '', 'active' => 1];
         echo '<div class="card form-card"><div class="card-h"><h3>' . ($a === 'new' ? 'New staff member' : 'Edit ' . e($u['name'])) . '</h3><a class="btn ghost sm" href="staff.php">Cancel</a></div><form method="post" action="staff.php?t=users&id=' . (int)($u['id'] ?? 0) . '">' . csrf_field() . '<div class="grid-form">'
             . '<div class="fld"><label>Full name *</label><input name="name" required value="' . e($u['name']) . '"></div><div class="fld"><label>Username *</label><input name="username" required value="' . e($u['username']) . '"></div>'
             . '<div class="fld"><label>Email</label><input type="email" name="email" value="' . e($u['email']) . '"></div><div class="fld"><label>Phone</label><input name="phone" value="' . e($u['phone']) . '"></div>'
             . '<div class="fld"><label>Role *</label><select name="role_id" required><option value="">— Select —</option>';
         foreach ($roles as $r) echo '<option value="' . $r['id'] . '"' . ((string)$u['role_id'] === (string)$r['id'] ? ' selected' : '') . '>' . e($r['name']) . '</option>';
-        echo '</select></div><div class="fld"><label>' . ($a === 'new' ? 'Temporary password *' : 'Reset password (optional)') . '</label><input type="password" name="password" autocomplete="new-password" placeholder="At least 8 characters, letters and numbers"><small class="muted">The user must change it at next login. Passwords are never shown.</small></div>'
+        echo '</select></div><div class="fld"><label>Team / section *</label><select name="team" required><option value="">— Select —</option>';
+        foreach (options('staff_teams') as $tm) echo '<option' . (($u['team'] ?? '') === $tm ? ' selected' : '') . '>' . e($tm) . '</option>';
+        echo '</select><small class="muted">Used for section dashboards, team performance and attendance.</small></div><div class="fld"><label>' . ($a === 'new' ? 'Temporary password *' : 'Reset password (optional)') . '</label><input type="password" name="password" autocomplete="new-password" placeholder="At least 10 characters, letters and numbers"><small class="muted">The user must change it at next login. Passwords are never shown.</small></div>'
             . '<div class="fld fld-check"><label class="check"><input type="checkbox" name="active" value="1"' . ($u['active'] ? ' checked' : '') . '> Active</label></div></div><div class="form-actions"><button class="btn">Save</button></div></form>' . ($a === 'edit' ? '<form method="post" action="staff.php?a=resetlink&id=' . (int)$u['id'] . '" style="margin-top:10px">' . csrf_field() . '<button class="btn ghost">' . icon('mail', 15) . ' Email a password reset link</button></form>' : '') . '</div>';
     } else {
         echo '<div class="toolbar"><span></span><a class="btn" href="staff.php?a=new">' . icon('plus', 16) . ' Add New staff</a></div>';
         $us = rows('SELECT u.*, r.name role FROM users u LEFT JOIN roles r ON r.id=u.role_id ORDER BY u.active DESC, u.name');
         card_open('', '', 'flush');
-        echo simple_table(['Name', 'Username', 'Role', 'Email', 'Last login', 'Status', 'Password'], array_map(function ($u) { return ['<b>' . e($u['name']) . '</b>', '@' . e($u['username']), e($u['role']), e($u['email']), e($u['last_login'] ? ago($u['last_login']) : 'Never'), ($u['active'] ? badge('Active') : badge('Inactive')) . ($u['must_change'] ? ' <span class="badge b-warn">Must change password</span>' : ''), '<form method="post" action="staff.php?a=resetlink&id=' . $u['id'] . '" data-confirm="Email a password reset link to ' . e($u['name']) . '?">' . csrf_field() . '<button class="btn ghost sm">' . icon('mail', 13) . ' Send reset link</button></form>']; }, $us), 'No staff.', array_map(function ($u) { return 'staff.php?a=edit&id=' . $u['id']; }, $us));
+        echo simple_table(['Name', 'Username', 'Role', 'Team', 'Last login', 'Status', 'Password'], array_map(function ($u) { return ['<b>' . e($u['name']) . '</b><br><small class="muted">' . e($u['email']) . '</small>', '@' . e($u['username']), e($u['role']), e($u['team']), e($u['last_login'] ? ago($u['last_login']) : 'Never'), ($u['active'] ? badge('Active') : badge('Inactive')) . ($u['must_change'] ? ' <span class="badge b-warn">Must change password</span>' : ''), '<form method="post" action="staff.php?a=resetlink&id=' . $u['id'] . '" data-confirm="Email a password reset link to ' . e($u['name']) . '?">' . csrf_field() . '<button class="btn ghost sm">' . icon('mail', 13) . ' Send reset link</button></form>']; }, $us), 'No staff.', array_map(function ($u) { return 'staff.php?a=edit&id=' . $u['id']; }, $us));
         card_close();
     }
 } else {

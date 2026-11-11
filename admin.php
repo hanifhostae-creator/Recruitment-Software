@@ -28,6 +28,14 @@ if (is_post()) {
         if (p('toggle')) { q('UPDATE custom_fields SET active=1-active WHERE id=?', [(int)p('toggle')]); flash('Custom field updated.'); }
         redirect('admin.php?t=fields');
     }
+    if ($t === 'sounds') {
+        $cfg = [];
+        foreach (NOTIF_KINDS as $k => $d) $cfg[$k] = ['on' => !empty($_POST['on'][$k]), 'sound' => isset(NOTIF_SOUNDS[$_POST['sound'][$k] ?? '']) ? $_POST['sound'][$k] : $d[1], 'icon' => preg_replace('/[^a-z-]/', '', (string)($_POST['icon'][$k] ?? $d[2]))];
+        set_setting('notif_config', json_encode($cfg));
+        audit('notification-settings', 'settings', null, null, $cfg);
+        flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
+        redirect('admin.php?t=sounds');
+    }
     if ($t === 'chat') {
         if (p('revoke')) { q('UPDATE chat_access SET archived=1, updated_at=? WHERE id=?', [now(), (int)p('revoke')]); audit('chat-access-revoke', 'chat_access', (int)p('revoke')); flash('Chat access removed.'); }
         elseif ((int)p('user_id')) {
@@ -47,7 +55,7 @@ if (is_post()) {
 
 page_start('Admin Control Centre', 'admin');
 page_head('Admin Control Centre', 'settings', 'Configure lists, custom fields, archive and restore, roles, settings and backups — no developer needed.');
-$tabs = ['options' => 'Custom options', 'fields' => 'Custom fields', 'archive' => 'Archive & restore', 'chat' => 'Chat access', 'roles' => 'Roles & permissions', 'settings' => 'System settings', 'backup' => 'Backup & health'];
+$tabs = ['options' => 'Custom options', 'fields' => 'Custom fields', 'archive' => 'Archive & restore', 'chat' => 'Chat access', 'sounds' => 'Notification sounds', 'roles' => 'Roles & permissions', 'settings' => 'System settings', 'backup' => 'Backup & health'];
 echo '<nav class="tabs">';
 foreach ($tabs as $k => $l) echo '<a class="' . ($k === $t ? 'on' : '') . '" href="' . ($k === 'roles' ? 'staff.php?t=roles' : ($k === 'settings' ? 'settings.php' : '?t=' . $k)) . '">' . e($l) . '</a>';
 echo '</nav>';
@@ -93,6 +101,20 @@ if ($t === 'archive') {
         card_close();
     }
 }
+if ($t === 'sounds') {
+    $cfg = notif_config();
+    $icons = ['bell', 'user-plus', 'folder', 'send', 'chat', 'target', 'check-circle', 'dollar', 'alert', 'activity', 'star', 'zap', 'heart', 'plane', 'briefcase', 'mail', 'clipboard', 'award'];
+    echo '<div class="alert info">' . icon('volume', 15) . ' Choose which alerts ring, the sound and the icon for each type. Staff can still mute their own computer with the speaker button in the top bar.</div>';
+    echo '<form method="post" action="?t=sounds" class="card flush">' . csrf_field() . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Alert type</th><th>On</th><th>Sound</th><th></th><th>Icon</th></tr></thead><tbody>';
+    foreach ($cfg as $k => $c) {
+        echo '<tr><td><span class="notif-ico">' . icon($c['icon'], 18) . '</span> <b>' . e($c['label']) . '</b></td><td><label class="switch"><input type="checkbox" name="on[' . $k . ']" value="1"' . ($c['on'] ? ' checked' : '') . '><i></i></label></td><td><select id="snd_' . $k . '" name="sound[' . $k . ']">';
+        foreach (NOTIF_SOUNDS as $sv => $sl) echo '<option value="' . $sv . '"' . ($c['sound'] === $sv ? ' selected' : '') . '>' . e($sl) . '</option>';
+        echo '</select></td><td><button type="button" class="btn ghost sm" data-test-sound="snd_' . $k . '">' . icon('volume', 14) . ' Test</button></td><td><select name="icon[' . $k . ']">';
+        foreach ($icons as $ic) echo '<option value="' . $ic . '"' . ($c['icon'] === $ic ? ' selected' : '') . '>' . e(ucwords(str_replace('-', ' ', $ic))) . '</option>';
+        echo '</select></td></tr>';
+    }
+    echo '</tbody></table></div><div class="form-actions" style="padding:0 18px 16px"><button class="btn">' . icon('check', 15) . ' Save alert settings</button></div></form>';
+}
 if ($t === 'chat') {
     echo '<div class="alert info">' . icon('lock', 15) . ' Candidate chats are private. Only the assigned deployment officer and team can read them. You (Super Admin) can read any chat, and every view by someone other than the deployment team is written to the audit log. Give another staff member access below.</div><div class="grid g2">';
     echo '<div class="card"><div class="card-h"><h3>' . icon('plus', 17) . ' Give access</h3></div><form method="post" action="?t=chat">' . csrf_field() . '<div class="fld" style="margin-bottom:12px"><label>Staff member *</label><select name="user_id" required><option value="">— Select —</option>';
@@ -115,6 +137,6 @@ if ($t === 'backup') {
     $checks = ['PHP version ' . PHP_VERSION => version_compare(PHP_VERSION, '7.4', '>='), 'pdo_sqlite enabled' => extension_loaded('pdo_sqlite'), 'data/ writable' => is_writable(ROOT . '/data'), 'uploads/ writable' => is_writable(ROOT . '/uploads') || is_writable(ROOT), 'data/.htaccess present' => is_file(ROOT . '/data/.htaccess'), 'uploads/.htaccess present' => is_file(ROOT . '/uploads/.htaccess'), 'fileinfo extension' => extension_loaded('fileinfo')];
     echo '<div class="card"><div class="card-h"><h3>' . icon('activity', 17) . ' System health</h3></div><ul class="list-plain">';
     foreach ($checks as $l => $ok) echo '<li><span>' . e($l) . '</span>' . badge($ok ? 'OK' : 'Missing') . '</li>';
-    echo '<li><span>Tables</span><b>' . (int)val("SELECT COUNT(*) FROM sqlite_master WHERE type='table'") . '</b></li><li><span>Seeded</span><b>' . e(dtfmt(setting('seeded'))) . '</b></li></ul></div></div>';
+    echo '<li><span>Tables</span><b>' . db_table_count() . '</b></li><li><span>Seeded</span><b>' . e(dtfmt(setting('seeded'))) . '</b></li></ul></div></div>';
 }
 page_end();

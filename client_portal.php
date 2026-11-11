@@ -5,6 +5,7 @@ if (g('logout')) { portal_logout(); flash('You have logged out.'); redirect('cli
 
 if (empty($_SESSION['portal']) || $_SESSION['portal']['type'] !== 'client') {
     if (is_post()) {
+        if (too_many_attempts()) { flash('Too many failed attempts. Please wait 15 minutes.', 'bad'); redirect('client_portal.php'); }
         $u = row('SELECT * FROM client_users WHERE lower(username)=lower(?) AND active=1 AND archived=0', [p('username')]);
         if ($u && password_verify((string)($_POST['password'] ?? ''), (string)$u['password_hash'])) { portal_login('client', $u['id'], $u['name']); redirect('client_portal.php'); }
         audit('portal-login-failed', 'client_users', null, null, ['username' => p('username')]);

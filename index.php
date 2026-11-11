@@ -2,6 +2,20 @@
 require __DIR__ . '/inc/boot.php';
 require_login();
 $u = me();
+if (is_super()) {
+    require_once __DIR__ . '/inc/dashboard.php';
+    $sec = isset(DASH_SECTIONS[g('s')]) ? g('s') : 'overview';
+    if (g('live')) dash_live_json($sec);
+    page_start('Dashboard', 'dashboard');
+    $h = (int)date('G');
+    page_head(($h < 12 ? 'Good morning' : ($h < 17 ? 'Good afternoon' : 'Good evening')) . ', ' . explode(' ', $u['name'])[0], 'grid', e(date('l, d F Y')) . ' · Super Admin · every number is live from the records.',
+        '<a class="btn ghost" href="reports.php">' . icon('bar-chart', 16) . ' Reports</a><a class="btn" href="candidates.php?a=new">' . icon('user-plus', 16) . ' New candidate</a>');
+    if (trim((string)setting('site_url', '')) === '') echo '<div class="alert warn">' . icon('alert', 15) . ' <b>Set the System URL</b> in <a href="settings.php">Settings</a> (for example <code>https://crm.yourdomain.com</code>). Password reset and portal emails use it.</div>';
+    if (trim((string)setting('smtp_host', '')) === '') echo '<div class="alert warn">' . icon('mail', 15) . ' <b>Email is not set up.</b> Password reset emails need an SMTP mailbox: <a href="settings.php">Settings → Email</a>, then "Send a test email".</div>';
+    dash_render($sec);
+    page_end();
+    exit;
+}
 page_start('Dashboard', 'dashboard');
 $h = (int)date('G');
 page_head(($h < 12 ? 'Good morning' : ($h < 17 ? 'Good afternoon' : 'Good evening')) . ', ' . explode(' ', $u['name'])[0], 'grid', e(date('l, d F Y')) . ' · ' . e($u['role_name']) . ' dashboard — live counters computed from records.',

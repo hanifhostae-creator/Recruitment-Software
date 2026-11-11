@@ -5,7 +5,7 @@ const CAND_STAGES = ['New', 'HR Assigned', 'Interviewed', 'File Opened', 'In Dep
 opt_defaults('close_reasons', ['Placed', 'Withdrawn', 'Inactive', 'Unsuccessful', 'Archived', 'Refund settled']);
 opt_defaults('assessment_types', ['Trade Test', 'Driving Test', 'English Test', 'Skills Interview', 'Medical']);
 
-ent('candidates', ['label' => 'Candidates', 'prefix' => 'CAN', 'title' => 'full_name', 'icon' => 'user', 'log_view' => true,
+ent('candidates', ['notify_new' => [null], 'label' => 'Candidates', 'prefix' => 'CAN', 'title' => 'full_name', 'icon' => 'user', 'log_view' => true,
     'dupe' => ['phone', 'email', 'passport_no'],
     'fields' => [
         'full_name' => ['Full name', 'text', 'req'],
@@ -50,9 +50,9 @@ ent('candidates', ['label' => 'Candidates', 'prefix' => 'CAN', 'title' => 'full_
     'after_save' => function ($id, $d, $old) {
         if (!$old) {
             ins('stage_history', ['entity' => 'candidates', 'entity_id' => $id, 'from_stage' => null, 'to_stage' => $d['stage'], 'reason' => 'Registered at Reception', 'by_user' => me()['id'], 'by_name' => me()['name'], 'at' => now()]);
-            if (!empty($d['hr_officer'])) notify($d['hr_officer'], 'New candidate assigned to you: ' . $d['full_name'], ent_url('candidates', $id));
+            if (!empty($d['hr_officer'])) notify($d['hr_officer'], 'New candidate assigned to you: ' . $d['full_name'], ent_url('candidates', $id), 'assigned');
         } elseif (!empty($d['hr_officer']) && $old['hr_officer'] != $d['hr_officer']) {
-            notify($d['hr_officer'], 'Candidate assigned to you: ' . ($d['full_name'] ?? $old['full_name']), ent_url('candidates', $id));
+            notify($d['hr_officer'], 'Candidate assigned to you: ' . ($d['full_name'] ?? $old['full_name']), ent_url('candidates', $id), 'assigned');
             if ($old['stage'] === 'New') stage_advance('candidates', $id, 'HR Assigned', 'HR officer assigned');
         }
         if (!empty($d['email']) && $old && $d['email'] !== $old['email']) q('UPDATE candidate_logins SET username=? WHERE candidate_id=?', [$d['email'], $id]);
@@ -203,7 +203,7 @@ ent('checklist_items', ['label' => 'Checklists', 'one' => 'Checklist item', 'tit
     'list' => ['name', 'stage', 'required'], 'filters' => ['stage']]);
 
 // ---- marketing
-ent('vacancies', ['label' => 'Vacancies', 'one' => 'Vacancy', 'prefix' => 'IN-REQ', 'title' => 'position', 'title_ref' => true, 'icon' => 'briefcase', 'bl' => 'Inside Hiring',
+ent('vacancies', ['notify_new' => [null], 'label' => 'Vacancies', 'one' => 'Vacancy', 'prefix' => 'IN-REQ', 'title' => 'position', 'title_ref' => true, 'icon' => 'briefcase', 'bl' => 'Inside Hiring',
     'fields' => [
         'position' => ['Position', 'opt:positions', 'req'], 'quantity' => ['Number required', 'int', 'req'], 'min_qualification' => ['Minimum qualifications', 'text'],
         'salary_terms' => ['Salary and terms (if approved)', 'text'], 'location' => ['Location', 'opt:emirates'], 'urgency' => ['Urgency', 'enum:Normal|Urgent|Very Urgent', 'default' => 'Normal'],
@@ -223,7 +223,7 @@ ent('campaign_posts', ['label' => 'Campaign Posts', 'one' => 'Post', 'prefix' =>
         'post_link' => ['Post ID or link', 'text'], 'posted_on' => ['Date posted', 'date', 'default' => date('Y-m-d')], 'creative' => ['Creative / copy version', 'text'], 'marketer' => ['Assigned marketer', 'user'], 'spend' => ['Spend', 'money']],
     'list' => ['ref_no', 'platform', 'vacancy_id', 'campaign_id', 'posted_on', 'marketer', 'spend'], 'filters' => ['platform', 'marketer', 'campaign_id'],
     'cols' => ['Leads' => function ($r) { return (int)val('SELECT COUNT(*) FROM enquiries WHERE post_id=? AND archived=0', [$r['id']]); }]]);
-ent('enquiries', ['label' => 'Enquiries', 'one' => 'Enquiry', 'prefix' => 'ENQ', 'title' => 'name', 'icon' => 'phone', 'dupe' => ['phone'],
+ent('enquiries', ['notify_new' => ['Marketing', 'lead'], 'label' => 'Enquiries', 'one' => 'Enquiry', 'prefix' => 'ENQ', 'title' => 'name', 'icon' => 'phone', 'dupe' => ['phone'],
     'fields' => [
         'name' => ['Name', 'text', 'req'], 'phone' => ['Phone', 'phone', 'req'], 'email' => ['Email', 'email'], 'vacancy_id' => ['Vacancy', 'ref:vacancies'], 'post_id' => ['Source post', 'ref:campaign_posts'],
         'source' => ['Source', 'opt:sources', 'req', 'help' => 'Use "Other / Unknown" and add a note when the source is not known.'], 'category' => ['Category', 'opt:enquiry_categories'],
@@ -422,7 +422,7 @@ function candidate_actions()
                 upd('candidates', $r['id'], ['hr_officer' => $uid, 'updated_at' => now(), 'updated_by' => me()['id']]);
                 audit('assign-hr', 'candidates', $r['id'], ['hr_officer' => $r['hr_officer']], ['hr_officer' => $uid]);
                 if ($r['stage'] === 'New') stage_advance('candidates', $r['id'], 'HR Assigned', 'Assigned to ' . user_name($uid));
-                notify($uid, 'Candidate assigned to you: ' . $r['full_name'], ent_url('candidates', $r['id']));
+                notify($uid, 'Candidate assigned to you: ' . $r['full_name'], ent_url('candidates', $r['id']), 'assigned');
                 return ['msg' => 'Assigned to ' . user_name($uid) . '.'];
             }],
         'interview' => ['label' => 'Interview', 'icon' => 'clipboard', 'perm' => 'approve', 'show' => function ($r) { return in_array($r['stage'], ['New', 'HR Assigned', 'Interviewed'], true); },
@@ -469,7 +469,7 @@ function candidate_actions()
                 $res = create_inside_file($r['id'], $plan['id'], $total, $adv, ['pay_method' => p('pay_method'), 'next_pay_date' => p('next_pay_date') ?: null]);
                 if (is_string($res)) return $res;
                 $ref = val('SELECT ref_no FROM inside_files WHERE id=?', [$res]);
-                notify_role('Reception', 'File confirmed by HR for ' . $r['full_name'] . ' (' . $ref . ') - ready to assign to Deployment', 'reception.php?t=ready');
+                notify_role('Reception', 'File confirmed by HR for ' . $r['full_name'] . ' (' . $ref . ') - ready to assign to Deployment', 'reception.php?t=ready', 'file');
                 return ['msg' => 'File ' . $ref . ' opened and Reception has been notified. You can assign the Deployment team now below, or leave it to Reception.', 'go' => ent_url('candidates', $r['id']) . '&act=deploy'];
             }],
         'deploy' => ['label' => 'Deploy', 'icon' => 'send', 'perm' => 'assign', 'show' => function ($r) { return in_array($r['stage'], ['File Opened', 'In Deployment'], true); },
@@ -489,7 +489,7 @@ function candidate_actions()
                 audit('deploy', 'candidates', $r['id'], ['team_id' => $r['team_id'], 'deploy_officer' => $r['deploy_officer']], ['team_id' => $team, 'deploy_officer' => $off]);
                 stage_advance('candidates', $r['id'], 'In Deployment', 'Assigned to deployment');
                 $link = candidate_portal_login($r['id']);
-                foreach (chat_participants($r['id']) as $pid) if ((int)$pid !== (int)me()['id']) notify($pid, 'Candidate assigned to your team: ' . $r['full_name'], ent_url('candidates', $r['id']));
+                foreach (chat_participants($r['id']) as $pid) if ((int)$pid !== (int)me()['id']) notify($pid, 'Candidate assigned to your team: ' . $r['full_name'], ent_url('candidates', $r['id']), 'deploy');
                 $mail = candidate_welcome_email($r['id'], $link);
                 return ['msg' => 'Assigned to Deployment. ' . $mail . ' Registration link (valid 7 days): <a href="' . e($link) . '">' . e($link) . '</a>'];
             }],
@@ -811,7 +811,31 @@ mod('recruitment', ['label' => 'Recruitment', 'icon' => 'briefcase', 'area' => '
 
 mod('marketing', ['label' => 'Marketing & Vacancies', 'icon' => 'target', 'area' => 'Sales & Marketing', 'order' => 1, 'desc' => 'Vacancy board, campaigns, posts, enquiries and lead-source performance.',
     'tabs' => ['board' => ['label' => 'Vacancy board', 'fn' => function ($base, $mod) { render_widgets(['marketing']); vacancy_board(); }], 'vacancies' => 'vacancies', 'campaigns' => 'campaigns', 'posts' => 'campaign_posts', 'enquiries' => 'enquiries',
-        'performance' => ['label' => 'Performance', 'fn' => function ($base, $mod) { marketing_performance(); }]]]);
+        'performance' => ['label' => 'Performance', 'fn' => function ($base, $mod) { marketing_performance(); }],
+        'sources' => ['label' => 'Candidate sources', 'fn' => function ($base, $mod) { candidate_sources_report(); }]]]);
+
+/** Who sent the candidates (through whom) and from which source — per day / period. */
+function candidate_sources_report()
+{
+    $from = g('from', date('Y-m-01'));
+    $to = g('to', today());
+    echo '<form class="toolbar filters" method="get">' . (g('t') ? '<input type="hidden" name="t" value="' . e(g('t')) . '">' : '') . (g('r') ? '<input type="hidden" name="r" value="' . e(g('r')) . '">' : '')
+        . '<label class="small">From <input type="date" name="from" value="' . e($from) . '"></label><label class="small">To <input type="date" name="to" value="' . e($to) . '"></label><button class="btn ghost sm">Apply</button>'
+        . '<a class="btn ghost sm" href="?' . e(http_build_query(array_filter(['t' => g('t'), 'r' => g('r'), 'from' => today(), 'to' => today()]))) . '">Today</a></form>';
+    $p = [$from, $to . ' 23:59:59'];
+    $files = "SUM(CASE WHEN EXISTS (SELECT 1 FROM inside_files f WHERE f.candidate_id=c.id) THEN 1 ELSE 0 END)";
+    $placed = "SUM(CASE WHEN c.stage IN ('Selected','Placed') THEN 1 ELSE 0 END)";
+    $bySrc = rows("SELECT COALESCE(NULLIF(c.source,''),'Unknown') AS k, COUNT(*) AS n, $files AS f, $placed AS pl FROM candidates c WHERE c.archived=0 AND c.created_at BETWEEN ? AND ? GROUP BY COALESCE(NULLIF(c.source,''),'Unknown') ORDER BY n DESC", $p);
+    $byRef = rows("SELECT MIN(COALESCE(NULLIF(TRIM(c.through_whom),''),'Not given')) AS k, COUNT(*) AS n, $files AS f, $placed AS pl FROM candidates c WHERE c.archived=0 AND c.created_at BETWEEN ? AND ? GROUP BY LOWER(TRIM(COALESCE(c.through_whom,''))) ORDER BY n DESC", $p);
+    $total = array_sum(array_column($bySrc, 'n'));
+    echo '<div class="kv" style="margin:0 0 16px"><div class="hl"><span>Candidates in period</span><b>' . $total . '</b></div><div><span>Top source</span><b>' . e($bySrc[0]['k'] ?? '—') . '</b></div><div><span>Top referrer</span><b>' . e($byRef[0]['k'] ?? '—') . '</b></div><div class="good"><span>Files opened</span><b>' . array_sum(array_column($bySrc, 'f')) . '</b></div><div><span>Selected / placed</span><b>' . array_sum(array_column($bySrc, 'pl')) . '</b></div></div>';
+    $days = [];
+    for ($d = max(strtotime($from), strtotime($to . ' -13 days')); $d <= strtotime($to); $d += 86400) $days[date('d M', $d)] = (int)val('SELECT COUNT(*) FROM candidates WHERE archived=0 AND created_at BETWEEN ? AND ?', [date('Y-m-d', $d), date('Y-m-d', $d) . ' 23:59:59']);
+    echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>' . icon('bar-chart', 17) . ' Candidates per day</h3></div>' . chart_cols($days) . '</div><div class="card"><div class="card-h"><h3>' . icon('pie', 17) . ' By source</h3></div>' . chart_donut(array_column($bySrc, 'n', 'k')) . '</div></div>';
+    $fmt = function ($r) use ($total) { return ['<b>' . e($r['k']) . '</b>', (int)$r['n'], $total ? round($r['n'] / $total * 100) . '%' : '—', (int)$r['f'], (int)$r['pl']]; };
+    echo '<div class="grid g2" style="margin-top:16px"><div class="card flush"><div class="card-h"><h3>' . icon('user', 17) . ' Through whom (who sent the candidates)</h3></div>' . simple_table(['Referred / sent by', 'Candidates', 'Share', 'Files opened', 'Selected'], array_map($fmt, $byRef), 'No candidates in this period.') . '</div>'
+        . '<div class="card flush"><div class="card-h"><h3>' . icon('target', 17) . ' By source</h3></div>' . simple_table(['Source', 'Candidates', 'Share', 'Files opened', 'Selected'], array_map($fmt, $bySrc), 'No candidates in this period.') . '</div></div>';
+}
 
 function vacancy_board()
 {
@@ -894,7 +918,7 @@ report_section('funnel', 'Inside hiring funnel', 'reports', function () {
     foreach ($st as $k => $v) { echo '<div><span>' . e($k) . '</span><span class="bar" style="--w:' . max(1, round($v / $max * 100)) . '%"></span><b>' . $v . '</b><small>' . ($prev ? round($v / max(1, $prev) * 100) . '%' : '') . '</small></div>'; $prev = $v; }
     echo '</div>';
     card_close();
-    $avg = function ($a, $b) { return val("SELECT AVG(julianday(b.at)-julianday(a.at)) FROM stage_history a JOIN stage_history b ON a.entity=b.entity AND a.entity_id=b.entity_id WHERE a.entity='candidates' AND a.to_stage=? AND b.to_stage=?", [$a, $b]); };
+    $avg = function ($a, $b) { return val("SELECT AVG(" . sql_days('a.at', 'b.at') . ") FROM stage_history a JOIN stage_history b ON a.entity=b.entity AND a.entity_id=b.entity_id WHERE a.entity='candidates' AND a.to_stage=? AND b.to_stage=?", [$a, $b]); };
     $fmt = function ($v) { return $v === null ? '—' : round($v, 1) . ' days'; };
     echo '<div class="kv"><div><span>Registration → HR interview</span><b>' . $fmt($avg('New', 'Interviewed') ?? $avg('HR Assigned', 'Interviewed')) . '</b></div><div><span>File opened → deployment</span><b>' . $fmt($avg('File Opened', 'In Deployment')) . '</b></div><div><span>File → selection (file-to-opportunity)</span><b>' . $fmt($avg('File Opened', 'Selected')) . '</b></div><div><span>Selection → closure</span><b>' . $fmt($avg('Selected', 'Closed')) . '</b></div></div>';
 });
@@ -949,6 +973,7 @@ report_section('deployment', 'Deployment performance', 'reports', function () {
     echo '<div class="card"><div class="card-h"><h3>Final outcomes</h3></div>' . chart_donut($out) . '</div></div>';
 });
 report_section('marketing', 'Marketing performance', 'reports', function () { marketing_performance(); });
+report_section('sources', 'Candidate sources', 'reports', function () { candidate_sources_report(); });
 report_section('journey', 'Candidate journey', 'reports', function () {
     $cid = (int)g('cid');
     echo '<form class="filters" method="get" style="margin-bottom:14px"><input type="hidden" name="r" value="journey"><select name="cid" data-autosubmit style="min-width:280px"><option value="">— Choose a candidate —</option>';
@@ -1052,4 +1077,4 @@ seeder(function () {
     add_task('Follow up Maria Santos overdue balance', 'High', date('Y-m-d', strtotime('-1 day')), $u('hr'), 'inside.php?a=view&id=' . $f5, 'demo-2');
     ins('candidate_assessments', $base + ['candidate_id' => $ali, 'type' => 'Driving Test', 'assessed_on' => today(), 'assessor' => $u('hr'), 'score' => 88, 'result' => 'Pass', 'feedback' => 'Good control of heavy vehicle.']);
     ins('job_offers', $base + ['ref_no' => next_number('OFR'), 'candidate_id' => $c6, 'company' => 'Al Futtaim Facilities', 'position' => 'General Helper', 'salary' => 1800, 'status' => 'Accepted', 'sent_on' => today()]);
-}, 20);
+}, 20, true);

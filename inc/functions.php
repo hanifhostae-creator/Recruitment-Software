@@ -47,14 +47,34 @@ function csrf_check()
 }
 
 function setting($k, $d = null) { $v = val('SELECT v FROM settings WHERE k=?', [$k]); return $v === null ? $d : $v; }
-function set_setting($k, $v) { q('INSERT OR REPLACE INTO settings (k,v) VALUES (?,?)', [$k, (string)$v]); }
+function set_setting($k, $v) { db_upsert('settings', ['k' => $k, 'v' => (string)$v], ['v']); }
+/** Stored secrets (SMTP password, WhatsApp token) are encrypted with APP_KEY from inc/config.php when it is set. */
+function secret_put($k, $v)
+{
+    $v = (string)$v;
+    if ($v !== '' && defined('APP_KEY') && APP_KEY !== '' && function_exists('openssl_encrypt')) {
+        $iv = random_bytes(12);
+        $c = openssl_encrypt($v, 'aes-256-gcm', hash('sha256', APP_KEY, true), OPENSSL_RAW_DATA, $iv, $tag);
+        $v = 'enc:' . base64_encode($iv . $tag . $c);
+    }
+    set_setting($k, $v);
+}
+function secret_get($k)
+{
+    $v = (string)setting($k, '');
+    if (strpos($v, 'enc:') !== 0) return $v;
+    if (!defined('APP_KEY') || !function_exists('openssl_decrypt')) return '';
+    $raw = base64_decode(substr($v, 4));
+    $out = openssl_decrypt(substr($raw, 28), 'aes-256-gcm', hash('sha256', APP_KEY, true), OPENSSL_RAW_DATA, substr($raw, 0, 12), substr($raw, 12, 16));
+    return $out === false ? '' : $out;
+}
 
 /** Next unique record number, e.g. next_number('CAN') => CAN-2026-00001. */
 function next_number($prefix)
 {
     $y = date('Y');
     $key = $prefix . '-' . $y;
-    q('INSERT OR IGNORE INTO counters (prefix,n) VALUES (?,0)', [$key]);
+    db_insert_ignore('counters', ['prefix' => $key, 'n' => 0]);
     q('UPDATE counters SET n=n+1 WHERE prefix=?', [$key]);
     return sprintf('%s-%s-%05d', $prefix, $y, (int)val('SELECT n FROM counters WHERE prefix=?', [$key]));
 }
@@ -147,6 +167,15 @@ function upload_file($field, $sub = 'files', $required = false, $types = null)
     if ($f['size'] > 10 * 1024 * 1024) return [null, 'The file is larger than 10 MB.'];
     $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, $types, true)) return [null, 'Allowed file types: ' . strtoupper(implode(', ', $types)) . '.'];
+    // check the real content, not only the name (stops disguised files)
+    if (function_exists('finfo_open')) {
+        $fi = finfo_open(FILEINFO_MIME_TYPE);
+        $mime = (string)finfo_file($fi, $f['tmp_name']);
+        $okMime = ['pdf' => ['application/pdf'], 'jpg' => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png'],
+            'doc' => ['application/msword', 'application/x-ole-storage', 'application/CDFV2', 'application/vnd.ms-office'],
+            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip', 'application/octet-stream'], 'csv' => ['text/plain', 'text/csv']];
+        if (isset($okMime[$ext]) && !in_array($mime, $okMime[$ext], true)) return [null, 'The file content does not match a real ' . strtoupper($ext) . ' file.'];
+    }
     $dir = ROOT . '/uploads/' . $sub;
     if (!is_dir($dir)) @mkdir($dir, 0775, true);
     $name = date('Ymd-His') . '-' . bin2hex(random_bytes(5)) . '.' . $ext;
@@ -162,9 +191,26 @@ function file_link($path, $label = 'Download')
 }
 
 /** Notification for a staff user. */
-function notify($uid, $text, $link = '')
+function notify($uid, $text, $link = '', $kind = 'system')
 {
-    if ($uid) ins('notifications', ['user_id' => $uid, 'text' => $text, 'link' => $link, 'is_read' => 0, 'at' => now()]);
+    if ($uid) ins('notifications', ['user_id' => $uid, 'kind' => $kind, 'text' => $text, 'link' => $link, 'is_read' => 0, 'at' => now()]);
+}
+/** Notification types: label, default sound and icon (the Super Admin changes them in Admin → Notification sounds). */
+const NOTIF_KINDS = [
+    'assigned' => ['Candidate assigned to me', 'chime', 'user-plus'], 'file' => ['File confirmed — ready for deployment', 'ding', 'folder'],
+    'deploy' => ['Candidate sent to my deployment team', 'bell', 'send'], 'chat' => ['New chat message', 'pop', 'chat'],
+    'lead' => ['New enquiry, lead or WhatsApp message', 'soft', 'target'], 'approval' => ['Approval needed', 'alert', 'check-circle'],
+    'payment' => ['Payment received', 'cash', 'dollar'], 'task' => ['Task, issue or ticket', 'alert', 'alert'],
+    'entry' => ['New entry anywhere (Super Admin)', 'soft', 'activity'], 'system' => ['Other notifications', 'soft', 'bell']];
+const NOTIF_SOUNDS = ['chime' => 'Chime', 'bell' => 'Bell', 'ding' => 'Ding', 'pop' => 'Pop', 'soft' => 'Soft', 'alert' => 'Alert', 'cash' => 'Cash register', 'none' => 'Silent'];
+function notif_config()
+{
+    static $c = null;
+    if ($c !== null) return $c;
+    $saved = json_decode((string)setting('notif_config', ''), true) ?: [];
+    $c = [];
+    foreach (NOTIF_KINDS as $k => $d) $c[$k] = ['on' => (bool)($saved[$k]['on'] ?? true), 'sound' => $saved[$k]['sound'] ?? $d[1], 'icon' => $saved[$k]['icon'] ?? $d[2], 'label' => $d[0]];
+    return $c;
 }
 /** System task (Tasks & Alerts). $key avoids duplicates for the same auto task. */
 function add_task($title, $severity = 'Medium', $due = null, $owner = null, $link = '', $key = null)
@@ -172,7 +218,7 @@ function add_task($title, $severity = 'Medium', $due = null, $owner = null, $lin
     if ($key && val('SELECT id FROM tasks WHERE auto_key=? AND status<>?', [$key, 'Done'])) return;
     ins('tasks', ['ref_no' => next_number('TSK'), 'title' => $title, 'severity' => $severity, 'due_date' => $due, 'owner' => $owner,
         'status' => 'Open', 'source' => 'System', 'link' => $link, 'auto_key' => $key, 'created_at' => now(), 'archived' => 0]);
-    if ($owner) notify($owner, 'New task: ' . $title, 'tasks.php');
+    if ($owner) notify($owner, 'New task: ' . $title, 'tasks.php', 'task');
 }
 
 /** Forward-only stage change through one function. $stages is the ordered list. */
@@ -255,13 +301,14 @@ function record_payment($entity, $id, $amount, array $o = [])
     $gl = payment_account($entity, $dir);
     $u = function_exists('me') ? me() : null;
     $ref = next_number($dir === 'in' ? 'RCT' : 'PAY');
-    $pid = ins('payments', ['ref_no' => $ref, 'entity' => $entity, 'entity_id' => $id, 'party' => $o['party'] ?? null, 'direction' => $dir,
+    $pid = ins('payments', ['ref_no' => $ref, 'entity' => $entity, 'entity_id' => $id, 'section' => $o['section'] ?? section_of_entity($entity, $id), 'party' => $o['party'] ?? null, 'direction' => $dir,
         'amount' => $amount, 'method' => $method, 'pay_type' => $o['pay_type'] ?? null, 'pay_date' => ($o['pay_date'] ?? '') ?: today(),
         'note' => $o['note'] ?? null, 'reversed' => 0, 'created_by' => $u['id'] ?? null, 'created_at' => now()]);
     $lines = $dir === 'in' ? [[$cash, $amount, 0], [$gl, 0, $amount]] : [[$gl, $amount, 0], [$cash, 0, $amount]];
     $jid = post_journal($o['pay_date'] ?? today(), ($dir === 'in' ? 'Receipt ' : 'Payment ') . $ref . ' - ' . $entity . ' #' . $id, $lines, 'payment', $pid);
     q('UPDATE payments SET journal_id=? WHERE id=?', [$jid, $pid]);
     audit('payment', $entity, $id, null, ['ref' => $ref, 'amount' => $amount, 'direction' => $dir, 'type' => $o['pay_type'] ?? null]);
+    if ($dir === 'in' && function_exists('notify_super') && function_exists('me') && me()) notify_super('Payment received ' . money($amount) . ' (' . $ref . ')', 'finance.php?t=ledger', 'payment');
     return $pid;
 }
 /** Reverse a payment: new negative entry with reason; original kept and flagged. */
@@ -272,7 +319,7 @@ function reverse_payment($pid, $reason)
     if ($pmt['reversed'] || $pmt['reversal_of']) return 'This entry has already been reversed or is itself a reversal.';
     if (trim($reason) === '') return 'A reason is required for a reversal.';
     $u = me();
-    $rid = ins('payments', ['ref_no' => next_number('REV'), 'entity' => $pmt['entity'], 'entity_id' => $pmt['entity_id'], 'party' => $pmt['party'],
+    $rid = ins('payments', ['ref_no' => next_number('REV'), 'entity' => $pmt['entity'], 'entity_id' => $pmt['entity_id'], 'section' => $pmt['section'], 'party' => $pmt['party'],
         'direction' => $pmt['direction'], 'amount' => -$pmt['amount'], 'method' => $pmt['method'], 'pay_type' => 'Reversal',
         'pay_date' => today(), 'note' => 'Reversal of ' . $pmt['ref_no'], 'reversal_of' => $pid, 'reason' => $reason, 'reversed' => 0,
         'created_by' => $u['id'] ?? null, 'created_at' => now()]);
@@ -280,6 +327,23 @@ function reverse_payment($pid, $reason)
     if ($pmt['journal_id']) { $j = reverse_journal($pmt['journal_id'], $reason); q('UPDATE payments SET journal_id=? WHERE id=?', [$j, $rid]); }
     audit('reverse', 'payments', $pid, ['amount' => $pmt['amount']], ['reversal' => $rid], $reason);
     return null;
+}
+/** Business sections used for accounts, dashboards and staff teams. */
+const SECTIONS = ['Inside Hiring', 'Outside Hiring', 'Travel & Tour', 'Marriage Bureau', 'Marketing', 'IT & Business Development', 'General'];
+/** Which business section a payment belongs to (set when the payment is recorded). */
+function section_of_entity($entity, $id)
+{
+    switch ($entity) {
+        case 'inside_files': return 'Inside Hiring';
+        case 'agents': return 'Outside Hiring';
+        case 'travel_bookings': return 'Travel & Tour';
+        case 'paybook_files': return 'Marriage Bureau';
+        case 'wages': return val('SELECT worker_id FROM wages WHERE id=?', [$id]) ? 'Outside Hiring' : 'General';
+        case 'invoices': case 'pos_sales':
+            $bl = (string)val("SELECT business_line FROM $entity WHERE id=?", [$id]);
+            return $bl === 'Chairman Services' || $bl === '' ? 'General' : $bl;
+    }
+    return 'General';
 }
 /** Net amount paid (reversals included) for a record. */
 function paid_total($entity, $id, $dir = 'in')

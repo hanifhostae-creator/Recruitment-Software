@@ -18,8 +18,8 @@ echo '<div class="card p-login"><h2>' . icon('lock', 22) . ' Choose a new passwo
 if (!$r || !$a) echo '<div class="alert bad">This reset link is not valid. It may have expired (links last 60 minutes) or already been used.</div><p><a class="btn" href="forgot.php">Request a new link</a></p>';
 else {
     echo '<p>Account: <b>' . e($a['name']) . '</b> (' . e(RESET_TYPES[$r['acct_type']]) . ')</p><form method="post">' . csrf_field()
-        . '<div class="fld" style="margin-bottom:12px"><label>New password *</label><input type="password" name="password" required minlength="8" autocomplete="new-password"><small class="muted">At least 8 characters, with letters and numbers.</small></div>'
-        . '<div class="fld" style="margin-bottom:12px"><label>Confirm new password *</label><input type="password" name="confirm" required minlength="8" autocomplete="new-password"></div><button class="btn" style="width:100%">Save new password</button></form>';
+        . '<div class="fld" style="margin-bottom:12px"><label>New password *</label><input type="password" name="password" required minlength="10" autocomplete="new-password"><small class="muted">At least 10 characters, with letters and numbers.</small></div>'
+        . '<div class="fld" style="margin-bottom:12px"><label>Confirm new password *</label><input type="password" name="confirm" required minlength="10" autocomplete="new-password"></div><button class="btn" style="width:100%">Save new password</button></form>';
 }
 echo '</div>';
 portal_end();

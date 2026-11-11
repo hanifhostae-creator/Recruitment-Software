@@ -23,7 +23,7 @@ function module_label($key) { return $GLOBALS['MODS'][$key]['label'] ?? ucfirst(
 function widget($mod, $label, callable $fn, $link = '', $icon = 'activity', $tone = 'blue') { $GLOBALS['WIDGETS'][] = compact('mod', 'label', 'fn', 'link', 'icon', 'tone'); }
 function search_provider($mod, callable $fn) { $GLOBALS['SEARCH'][] = ['mod' => $mod, 'fn' => $fn]; }
 function report_section($key, $label, $mod, callable $fn) { $GLOBALS['REPORTS'][$key] = compact('label', 'mod', 'fn'); }
-function seeder(callable $fn, $order = 50) { $GLOBALS['SEEDERS'][] = [$order, $fn]; }
+function seeder(callable $fn, $order = 50, $demo = false) { if (!$demo || DEMO_DATA) $GLOBALS['SEEDERS'][] = [$order, $fn]; }
 function run_seeders()
 {
     usort($GLOBALS['SEEDERS'], function ($a, $b) { return $a[0] <=> $b[0]; });

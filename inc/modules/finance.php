@@ -147,7 +147,7 @@ function invoice_panel($inv)
 {
     $b = invoice_balance($inv);
     $items = rows('SELECT * FROM invoice_items WHERE invoice_id=? AND archived=0', [$inv['id']]);
-    card_open(icon('file-text', 17) . ' Invoice ' . e($inv['ref_no']), '<button class="btn ghost sm no-print" onclick="window.print()">' . icon('printer', 14) . ' Print</button>');
+    card_open(icon('file-text', 17) . ' Invoice ' . e($inv['ref_no']), '<button class="btn ghost sm no-print" data-print>' . icon('printer', 14) . ' Print</button>');
     echo '<div class="grid g2" style="margin-bottom:12px"><div><b>' . e(setting('company_name')) . '</b><br><span class="muted small">' . e(setting('company_address')) . ' · ' . e(setting('company_phone')) . '</span></div><div class="right"><span class="muted small">Bill to</span><br><b>' . e($inv['company_id'] ? ent_title('companies', $inv['company_id']) : ($inv['agent_id'] ? ent_title('agents', $inv['agent_id']) : $inv['customer_name'])) . '</b><br><span class="small">Issued ' . e(dfmt($inv['issue_date'])) . ' · Due ' . e(dfmt($inv['due_date'])) . '</span></div></div>';
     $data = array_map(function ($i) { return [e($i['description']), num($i['qty']), money($i['unit_price']), '<span class="num">' . money($i['line_total']) . '</span>']; }, $items);
     echo simple_table(['Description', 'Qty', 'Unit price', 'Amount'], $data, 'No items yet — add items below (draft only).');
@@ -180,6 +180,7 @@ function party_label($pm)
 mod('finance', ['label' => 'Finance', 'icon' => 'dollar', 'area' => 'Money', 'order' => 1, 'desc' => 'Payment ledger, candidate / agent / client balances, wages, expenses and daily finance reports.',
     'tabs' => [
         'dash' => ['label' => 'Dashboard', 'fn' => function ($base, $mod) { finance_dashboard(); }],
+        'sections' => ['label' => 'Section accounts', 'fn' => function ($base, $mod) { finance_sections($mod); }],
         'ledger' => ['label' => 'Payment ledger', 'post' => function ($base, $mod) {
             if (g('a') === 'export') { require_action($mod, 'export'); $d = rows('SELECT * FROM payments ORDER BY id'); csv_out('payment-ledger-' . date('Ymd') . '.csv', ['Ref', 'Date', 'Linked to', 'Direction', 'Type', 'Method', 'Amount', 'Reversed', 'Reversal of', 'Reason'], array_map(function ($p) { return [$p['ref_no'], $p['pay_date'], $p['entity'] . ' #' . $p['entity_id'] . ' ' . ent_title($p['entity'], $p['entity_id']), $p['direction'], $p['pay_type'], $p['method'], $p['amount'], $p['reversed'] ? 'Yes' : '', $p['reversal_of'], $p['reason']]; }, $d), 'payments'); }
             if (is_post() && g('a') === 'reverse') { require_action($mod, 'finance'); $err = reverse_payment((int)p('pid'), p('reason')); flash($err ?: 'Payment reversed.', $err ? 'bad' : 'ok'); redirect($base); }
@@ -276,6 +277,40 @@ mod('accounting', ['label' => 'Accounting', 'icon' => 'book', 'area' => 'Money',
 mod('invoices', ['label' => 'Invoices', 'icon' => 'file-text', 'area' => 'Money', 'order' => 3, 'desc' => 'Estimates convert to invoices; invoices take partial payments, credit notes and returns.',
     'tabs' => ['invoices' => 'invoices', 'items' => 'invoice_items', 'estimates' => 'estimates', 'estimate_items' => 'estimate_items', 'credit' => 'credit_notes', 'returns' => 'invoice_returns']]);
 
+/** Accounts per business section: each section has its own income and expenses; the overall view adds them up. */
+function finance_sections($mod)
+{
+    require_once ROOT . '/inc/dashboard.php';
+    $sec = in_array(g('sec'), SECTIONS, true) ? g('sec') : null;
+    $from = g('from', date('Y-m-01'));
+    $to = g('to', today());
+    $q = function ($s) use ($from, $to) { return 'finance.php?' . http_build_query(['t' => 'sections', 'sec' => $s, 'from' => $from, 'to' => $to]); };
+    echo '<div class="pills"><a class="' . (!$sec ? 'on' : '') . '" href="' . e($q(null)) . '">All sections</a>';
+    foreach (SECTIONS as $s) echo '<a class="' . ($sec === $s ? 'on' : '') . '" href="' . e($q($s)) . '">' . e($s) . '</a>';
+    echo '</div><form class="toolbar filters" method="get"><input type="hidden" name="t" value="sections"><input type="hidden" name="sec" value="' . e($sec) . '"><label class="small">From <input type="date" name="from" value="' . e($from) . '"></label><label class="small">To <input type="date" name="to" value="' . e($to) . '"></label><button class="btn ghost sm">Apply</button></form>';
+    $pl = section_pl($from, $to);
+    if (!$sec) {
+        $in = array_sum(array_column($pl, 'in')); $out = array_sum(array_column($pl, 'out'));
+        echo '<div class="kv" style="margin:0 0 16px"><div class="good"><span>Income</span><b>' . money($in) . '</b></div><div class="bad"><span>Expenses</span><b>' . money($out) . '</b></div><div class="' . ($in - $out < 0 ? 'bad' : 'hl') . '"><span>Profit / loss</span><b>' . money($in - $out) . '</b></div></div>';
+        $r = [];
+        foreach (SECTIONS as $s) $r[] = ['<a href="' . e($q($s)) . '"><b>' . e($s) . '</b></a>', money($pl[$s]['in']), money($pl[$s]['out']), '<b class="' . ($pl[$s]['in'] - $pl[$s]['out'] < 0 ? 'neg' : 'pos') . '">' . money($pl[$s]['in'] - $pl[$s]['out']) . '</b>'];
+        echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>' . icon('bar-chart', 17) . ' Profit / loss by section</h3></div>' . chart_pl($pl) . '</div><div class="card flush"><div class="card-h"><h3>' . icon('book', 17) . ' Totals</h3></div>' . simple_table(['Section', 'Income', 'Expenses', 'Profit / loss'], $r) . '</div></div>';
+        return;
+    }
+    $x = $pl[$sec];
+    echo '<div class="kv" style="margin:0 0 14px"><div class="good"><span>' . e($sec) . ' income</span><b>' . money($x['in']) . '</b></div><div class="bad"><span>Expenses</span><b>' . money($x['out']) . '</b></div><div class="' . ($x['in'] - $x['out'] < 0 ? 'bad' : 'hl') . '"><span>Profit / loss</span><b>' . money($x['in'] - $x['out']) . '</b></div></div>';
+    if (can('finance', 'add')) echo '<div class="ph-r" style="margin-bottom:14px"><a class="btn ok" href="' . e('finance.php?' . http_build_query(['t' => 'expenses', 'a' => 'new', 'kind' => 'Other Income', 'business_line' => $sec])) . '">' . icon('plus', 15) . ' Add ' . e($sec) . ' income</a><a class="btn danger" href="' . e('finance.php?' . http_build_query(['t' => 'expenses', 'a' => 'new', 'kind' => 'Expense', 'business_line' => $sec])) . '">' . icon('plus', 15) . ' Add ' . e($sec) . ' expense</a></div>';
+    echo '<p class="muted small">Receipts taken on files, invoices, bookings and paybook files are added to their section automatically. Use the buttons for other income and for expenses of this section.</p>';
+    $pays = rows('SELECT * FROM payments WHERE section=? AND pay_date BETWEEN ? AND ? ORDER BY id DESC LIMIT 200', [$sec, $from, $to]);
+    card_open(icon('dollar', 17) . ' Receipts &amp; payments · ' . e($sec));
+    echo simple_table(['Ref', 'Date', 'Linked record', 'In / out', 'Type', 'Amount'], array_map(function ($p) { return ['<b class="ref">' . e($p['ref_no']) . '</b>', e(dfmt($p['pay_date'])), party_label($p), $p['direction'] === 'in' ? badge('In') : '<span class="badge b-warn">Out</span>', e($p['pay_type']), '<span class="num">' . money($p['amount']) . '</span>']; }, $pays), 'No receipts or payments in this period.');
+    card_close();
+    $fe = rows('SELECT * FROM finance_entries WHERE business_line=? AND entry_date BETWEEN ? AND ? AND archived=0 ORDER BY entry_date DESC', [$sec, $from, $to]);
+    card_open(icon('card', 17) . ' Expenses &amp; other income · ' . e($sec));
+    echo simple_table(['Ref', 'Date', 'Type', 'Category', 'Reference', 'Amount'], array_map(function ($f) { return ['<b class="ref">' . e($f['ref_no']) . '</b>', e(dfmt($f['entry_date'])), $f['kind'] === 'Expense' ? '<span class="badge b-bad">Expense</span>' : badge('Income'), e($f['category']), e($f['linked_record']), '<span class="num">' . money($f['amount']) . '</span>']; }, $fe), 'No expenses or other income in this period.', array_map(function ($f) { return ent_url('finance_entries', $f['id']); }, $fe));
+    card_close();
+}
+
 function finance_dashboard()
 {
     render_widgets(['finance', 'invoices', 'accounting']);
@@ -354,7 +389,7 @@ seeder(function () {
         ['3000', 'Owner\'s Capital', 'Equity'], ['3100', 'Retained Earnings', 'Equity'], ['4000', 'Inside Hiring Fees', 'Income'], ['4100', 'Outside Hiring Service Income', 'Income'], ['4200', 'Travel & Tour Income', 'Income'], ['4300', 'Other Income', 'Income'], ['4900', 'Sales Returns', 'Income'],
         ['5000', 'Agent Costs', 'Expense'], ['5100', 'Wages & Salaries', 'Expense'], ['5200', 'Office & Operating Expenses', 'Expense'], ['5300', 'Marketing Expenses', 'Expense'], ['5400', 'Refunds', 'Expense'], ['5500', 'Travel Supplier Costs', 'Expense']] as $a)
         ins('accounts', $b + ['code' => $a[0], 'name' => $a[1], 'type' => $a[2], 'active' => 1]);
-    post_journal(date('Y-m-01'), 'Opening capital', [['1010', 60000, 0], ['1000', 5000, 0], ['3000', 0, 65000]], 'opening');
+    if (DEMO_DATA) post_journal(date('Y-m-01'), 'Opening capital', [['1010', 60000, 0], ['1000', 5000, 0], ['3000', 0, 65000]], 'opening');
 }, 5);
 seeder(function () {
     $b = ['created_at' => now(), 'archived' => 0];
@@ -379,4 +414,4 @@ seeder(function () {
     foreach ([['5200', 25000], ['5300', 6000], ['5100', 45000]] as $x) ins('budget_allocations', $b + ['budget_id' => $bud, 'account_id' => acct($x[0]), 'amount' => $x[1]]);
     $ktm = (int)val("SELECT id FROM agents WHERE agency_name='Kathmandu Manpower Agency'");
     record_payment('agents', $ktm, 400, ['direction' => 'out', 'method' => 'Bank Transfer', 'pay_type' => 'Agent Payment', 'party' => 'Kathmandu Manpower Agency']);
-}, 40);
+}, 40, true);

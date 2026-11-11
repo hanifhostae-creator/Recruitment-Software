@@ -40,11 +40,21 @@ this same repo. Each session stays inside its own module.
   is finished and tested.
 - Never rewrite `main`. Never push another session's half-finished work.
 
-## Current status (v1.0 — full first build done)
+## START HERE in a new session
 
-The complete system from the spec is built and tested (all modules, 3 portals, reports,
-WhatsApp webhook, double-entry accounting). The three sessions now **improve and extend**
-their module instead of starting from zero. Read `docs/core-api.md` before changing code.
+1. Read **`docs/PROGRESS.md`** — what is built, what is tested, what the owner asked for next.
+2. Read `docs/core-api.md` (helpers, entity engine, mailer, chat, notifications) before changing code.
+3. Deployment and database: `docs/DEPLOY-HOSTINGER.md`.
+4. When you finish a piece of work, **update `docs/PROGRESS.md`** (date, what changed, what is next) in the same commit.
+
+### Owner rules (must follow)
+
+- **Do not reveal how or by whom the system was built.** No AI / tool / author names in code, comments,
+  page text, HTTP headers or commit messages. **Do not add `Co-Authored-By` or session-link
+  attribution lines to commits or pull requests** (owner's explicit instruction).
+- The repo should be **private** on GitHub (it contains this file and the docs).
+- Talk to the owner in Roman Urdu / Hindi; everything inside the system stays in English.
+- Test on **both** databases before pushing (SQLite quick start and MySQL/MariaDB — see PROGRESS.md "How to test").
 
 ## Code layout & file ownership (prevents merge conflicts)
 
@@ -66,8 +76,9 @@ widgets, search providers, report sections and demo seeders are registered in it
 ## Stack (fixed by the spec — Section 3)
 
 - Plain PHP 7.4+ (production PHP 8.1/8.2). No Composer, no framework, no Node build.
-- SQLite through PDO, one file `data/rh.sqlite`, created and seeded on first visit.
-- If `pdo_sqlite` is missing, show a plain-English message telling the owner to enable it.
+- **MySQL / MariaDB** (live site) or **SQLite** (quick start) through PDO — chosen in `inc/config.php` (never committed; copy `inc/config.sample.php`). Schema is created and upgraded automatically on the first visit for both. Write portable SQL (use `db_upsert`, `db_insert_ignore`, `sql_days`, `db_ddl`).
+- Without `inc/config.php` the system runs as a demo with sample data; with it, it starts empty and `setup.php` creates the first Super Admin.
+- If the PDO driver is missing, a plain-English page tells the owner which PHP extension to enable.
 - Uploads in `uploads/` (CVs in `uploads/cv/`), downloaded only through `file.php`.
 - `data/` and `uploads/` blocked by `.htaccess` (direct `/data/rh.sqlite` → 403).
 - CSS + vanilla JS only; charts drawn with SVG/canvas, no chart library.

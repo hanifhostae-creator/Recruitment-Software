@@ -4,3 +4,6 @@ data/*
 uploads/*
 !uploads/.htaccess
 .DS_Store
+
+# server configuration (database password, secret key)
+inc/config.php

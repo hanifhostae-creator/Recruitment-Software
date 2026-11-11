@@ -25,7 +25,7 @@ if (g('register') !== '') {
     else {
         echo '<p>Hello <b>' . e($c['full_name']) . '</b> (' . e($c['ref_no']) . '). Choose a password for your candidate portal.</p><form method="post">' . csrf_field()
             . '<div class="fld" style="margin-bottom:12px"><label>Username (your email)</label><input value="' . e($l['username'] ?: 'Email missing — contact the deployment team') . '" readonly></div>'
-            . '<div class="fld" style="margin-bottom:12px"><label>Password *</label><input type="password" name="password" required minlength="8" autocomplete="new-password"></div><div class="fld" style="margin-bottom:12px"><label>Confirm password *</label><input type="password" name="confirm" required minlength="8" autocomplete="new-password"></div>'
+            . '<div class="fld" style="margin-bottom:12px"><label>Password *</label><input type="password" name="password" required minlength="10" autocomplete="new-password"></div><div class="fld" style="margin-bottom:12px"><label>Confirm password *</label><input type="password" name="confirm" required minlength="10" autocomplete="new-password"></div>'
             . '<button class="btn" style="width:100%">Set password and sign in</button></form><p class="muted small" style="margin-top:10px">Link valid until ' . e(dtfmt($l['token_expires'])) . '.</p>';
     }
     echo '</div>';
@@ -37,7 +37,7 @@ if (g('register') !== '') {
 if (empty($_SESSION['portal']) || $_SESSION['portal']['type'] !== 'candidate') {
     if (is_post()) {
         $key = 'pfail_' . md5(p('mode') . p('username') . p('file_no'));
-        if (($_SESSION[$key] ?? 0) >= 5) { flash('Too many attempts. Please wait a few minutes.', 'bad'); redirect('portal.php'); }
+        if (too_many_attempts() || ($_SESSION[$key] ?? 0) >= 5) { flash('Too many attempts. Please wait a few minutes.', 'bad'); redirect('portal.php'); }
         $cid = null;
         if (p('mode') === 'legacy') {
             $f = row('SELECT f.candidate_id, c.phone FROM inside_files f JOIN candidates c ON c.id=f.candidate_id WHERE upper(f.ref_no)=upper(?)', [p('file_no')]);
@@ -97,7 +97,7 @@ if (is_post()) {
         else {
             chat_add($cid, 'Candidate', $cid, $body, $path);
             if ($path) ins('documents', ['ref_no' => next_number('DOC'), 'doc_type' => 'Other', 'doc_type_other' => 'Sent in chat', 'candidate_id' => $cid, 'status' => 'Received', 'file' => $path, 'created_at' => now(), 'archived' => 0]);
-            foreach ($parts as $pid) notify($pid, 'New chat message from ' . $c['full_name'], 'chat.php?c=' . $cid);
+            foreach ($parts as $pid) notify($pid, 'New chat message from ' . $c['full_name'], 'chat.php?c=' . $cid, 'chat');
         }
         redirect('portal.php?p=chat');
     }
@@ -172,7 +172,7 @@ if ($pg === 'chat') {
     else {
         echo '<p class="muted small">Your deployment team: <b>' . e(implode(', ', array_map('user_name', $parts))) . '</b></p><div class="msgs" id="msgs" style="max-height:55vh">' . chat_messages_html($cid, 'candidate') . '</div>'
             . '<form method="post" enctype="multipart/form-data" class="chat-form" action="portal.php?p=chat">' . csrf_field() . '<div style="flex:1"><textarea name="body" rows="2" placeholder="Type your message…" maxlength="4000"></textarea><input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="margin-top:6px;font-size:12px"><small class="muted">You can also send a document (PDF, DOC, DOCX, JPG, PNG · max 10 MB).</small></div><button class="btn">' . icon('send', 15) . ' Send</button></form>'
-            . '<script>(function(){var m=document.getElementById("msgs"),last=m.innerHTML;m.scrollTop=m.scrollHeight;setInterval(function(){if(document.hidden)return;fetch("portal.php?p=chat&frag=1",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h!==null&&h!==last){var atEnd=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.innerHTML=h;last=h;if(atEnd)m.scrollTop=m.scrollHeight}}).catch(function(){})},8000)})();</script>';
+            . '<script nonce="' . csp_nonce() . '">(function(){var m=document.getElementById("msgs"),last=m.innerHTML;m.scrollTop=m.scrollHeight;setInterval(function(){if(document.hidden)return;fetch("portal.php?p=chat&frag=1",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h!==null&&h!==last){var atEnd=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.innerHTML=h;last=h;if(atEnd)m.scrollTop=m.scrollHeight}}).catch(function(){})},8000)})();</script>';
     }
     card_close();
 }

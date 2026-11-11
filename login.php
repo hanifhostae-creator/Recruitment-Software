@@ -20,20 +20,21 @@ if (g('a') === 'change') {
         redirect('login.php?a=change');
     }
     html_head('Change password');
-    echo '<body><div class="auth"><div class="auth-art"><a class="brand" href="index.php"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>Business Management System</small></span></a><div><h1>Secure your <span>account</span></h1><p>' . ((int)$u['must_change'] ? 'This is your first login (or your password was reset). Please set your own password before continuing.' : 'Choose a strong password you do not use anywhere else.') . '</p></div><p class="small">Passwords need at least 8 characters with letters and numbers.</p></div>'
+    echo '<body><div class="auth"><div class="auth-art"><a class="brand" href="index.php"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>Business Management System</small></span></a><div><h1>Secure your <span>account</span></h1><p>' . ((int)$u['must_change'] ? 'This is your first login (or your password was reset). Please set your own password before continuing.' : 'Choose a strong password you do not use anywhere else.') . '</p></div><p class="small">Passwords need at least 10 characters with letters and numbers.</p></div>'
         . '<div class="auth-form"><div class="auth-box"><h2>Change password</h2><p class="muted">Signed in as <b>' . e($u['username']) . '</b></p>';
     foreach (flash() as $f) echo '<div class="alert ' . e($f[0]) . '">' . $f[1] . '</div>';
-    echo '<form method="post">' . csrf_field() . '<div><label>Current password</label><input type="password" name="current" required autocomplete="current-password"></div><div><label>New password</label><input type="password" name="new" required minlength="8" autocomplete="new-password"></div><div><label>Confirm new password</label><input type="password" name="confirm" required minlength="8" autocomplete="new-password"></div><button class="btn">' . icon('lock', 16) . ' Save new password</button></form>'
+    echo '<form method="post">' . csrf_field() . '<div><label>Current password</label><input type="password" name="current" required autocomplete="current-password"></div><div><label>New password</label><input type="password" name="new" required minlength="10" autocomplete="new-password"></div><div><label>Confirm new password</label><input type="password" name="confirm" required minlength="10" autocomplete="new-password"></div><button class="btn">' . icon('lock', 16) . ' Save new password</button></form>'
         . ((int)$u['must_change'] ? '<p class="small muted" style="margin-top:14px"><a href="logout.php">Log out</a></p>' : '<p class="small" style="margin-top:14px"><a href="index.php">Back to dashboard</a></p>') . '</div></div></div><script src="assets/app.js"></script></body></html>';
     exit;
 }
 
 if (me()) redirect('index.php');
+if (!(int)val('SELECT COUNT(*) FROM users')) redirect('setup.php');
 if (is_post()) {
     $err = login_attempt(p('username'), (string)($_POST['password'] ?? ''));
     if ($err) { flash($err, 'bad'); redirect('login.php'); }
     $next = g('next');
-    redirect($next && strpos($next, '//') === false && $next[0] === '/' ? $next : 'index.php');
+    redirect($next && $next[0] === '/' && strpos($next, '//') === false && strpos($next, '\\') === false && !preg_match('/[\r\n]/', $next) ? $next : 'index.php');
 }
 html_head('Sign in');
 echo '<body><div class="auth"><div class="auth-art"><a class="brand" href="login.php"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>RH Business Solutions &amp; Marketing Management</small></span></a>'

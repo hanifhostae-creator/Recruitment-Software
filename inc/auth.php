@@ -59,8 +59,14 @@ function deny($msg = 'You do not have permission to open this page.')
     exit;
 }
 
+/** Too many failed sign-ins from this network address in the last 15 minutes (staff and portals). */
+function too_many_attempts()
+{
+    return (int)val("SELECT COUNT(*) FROM audit WHERE action IN ('login-failed','portal-login-failed') AND ip=? AND at>=?", [$_SERVER['REMOTE_ADDR'] ?? 'cli', date('Y-m-d H:i:s', time() - 900)]) >= 10;
+}
 function login_attempt($username, $password)
 {
+    if (too_many_attempts()) return 'Too many failed attempts from your network. Please wait 15 minutes and try again.';
     $key = 'fail_' . md5(strtolower($username));
     if (($_SESSION[$key] ?? 0) >= 5 && (time() - ($_SESSION[$key . '_t'] ?? 0)) < 300) return 'Too many failed attempts. Please wait 5 minutes and try again.';
     $u = row('SELECT * FROM users WHERE lower(username)=lower(?)', [$username]);
@@ -83,7 +89,7 @@ function login_attempt($username, $password)
 /** Password rules used for staff and portal accounts. */
 function password_problem($pw, $confirm = null)
 {
-    if (strlen($pw) < 8) return 'The password must be at least 8 characters.';
+    if (strlen($pw) < 10) return 'The password must be at least 10 characters.';
     if (!preg_match('/[A-Za-z]/', $pw) || !preg_match('/\d/', $pw)) return 'The password must contain letters and numbers.';
     if ($confirm !== null && $pw !== $confirm) return 'The two passwords do not match.';
     return null;
