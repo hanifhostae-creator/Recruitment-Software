@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.4.0 (15 Nov 2026)
+## Current version: 1.5.0 (15 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -70,7 +70,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - MySQL: create a database + user, then either write `inc/config.php` or start PHP with env vars:
   `RH_DB_DRIVER=mysql RH_DB_HOST=127.0.0.1 RH_DB_NAME=rh_test RH_DB_USER=rh RH_DB_PASS=... RH_DEMO_DATA=1 php -S localhost:8000 router.php`
 - Last results (15 Nov, both DBs): crawl of ~1,565 pages with 0 errors; acceptance suite 36/36; reset + workflow + chat
-  privacy + v1.4 checks 54/55 (the 1 is a test-script quirk, behaviour verified by hand); live-mode + security checks all pass.
+  privacy + v1.4 + v1.5 checks 83/85 (A1 counted twice) (the 1 is a test-script quirk, behaviour verified by hand); live-mode + security checks all pass.
 
 - **v1.3** (15 Nov): Super Admin hero "Welcome to Super Admin Panel"; no check-in/out for the Super Admin (excluded from
   attendance counts, manual box and staff tables); elevated tiles with coloured shadows, 3D tilt + light glare, click
@@ -92,6 +92,25 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   - A sent interview location is also **posted in the chat** with a clickable map link; **links in chat are clickable**.
   - Empty related lists are hidden on detail pages (simpler screens).
 
+- **v1.5** (15 Nov, simpler again + voice + app-like portal):
+  - **HR simple screen** (`candidate_simple()` / `candidate_simple_screen()` in inside.php, engine option `simple` + action flag
+    `simple_hide`): basic details + CV preview + ONE box "Interview result & payment" → result (Selected / Not selected /
+    On hold), agreed total, Paid now? Yes/No, amount, pays later (live), later date → **File done** (hidden action `hrdone`).
+    Then the same screen shows **Assign to deployment team** (HR or Reception). "Show all details" (`&full=1`) opens the full record.
+  - **Spoken messages editable by the Super Admin**: Admin → Notification sounds → "Spoken messages" (`VOICE_MSGS`,
+    `voice_text()`, `notify_msg()` in functions.php, setting `voice_msgs`). Placeholders like {name} {position} {amount}.
+  - New alerts: Reception "File done: … assign the deployment team" (no money), Super Admin "New file opened … Payment
+    received" (the separate payment alert is skipped for that receipt), Super Admin "New enquiry/lead received", "Payment
+    received: amount from party", "Deal done" (CRM deal → Won); deployment: "activated the portal", new message, interview reply.
+  - **Repeat voice**: pop-up has ↻ repeat; opening an alert shows a bar with "Repeat voice"; notifications list has Repeat.
+  - **Deployment chat**: header with WhatsApp (wa.me, UAE 05x → 9715x) and call buttons; "Start the conversation" empty
+    state; until the candidate registers: "Portal not active" strip with Send link by WhatsApp / Copy / Email (same 7-day
+    link, not regenerated); message box opens after registration; "Portal link" button hidden once registered.
+  - Candidates without email: portal username = phone digits; candidates can sign in with email or phone.
+  - **Message box** (`chat_composer()`): attach, camera photo, send my location (Google Maps link), auto-grow; photos show inline.
+  - **Candidate portal = phone app**: bottom tab bar (Chat, Interviews, Payments, Profile), home = status card + pending
+    interview cards (Open map, quick result) + chat. Permissions-Policy now allows geolocation=(self).
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -101,6 +120,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-15 · v1.5.0 · HR one-box File done, assign from the same screen, admin-editable spoken messages, repeat voice, admin alerts (file/payment/lead/deal), deployment chat with portal link + WhatsApp + camera/location, phone-app candidate portal.
 - 2026-11-15 · v1.4.0 · Simplified reception/HR/deployment flow: CV optional + camera, voice alerts, CV preview, plan-free file form, deployment workspace, locations in chat.
 - 2026-11-15 · v1.3.0 · Welcome banner, no owner check-in, premium dashboard / sidebar animations.
 - 2026-11-12 · v1.2.0 · MySQL support, live mode + setup, security hardening, sectioned dashboard, section accounts,

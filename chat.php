@@ -11,6 +11,16 @@ if ($cid && g('frag')) {
     echo chat_messages_html($cid, 'staff');
     exit;
 }
+if ($cid && is_post() && p('do') === 'sendlink') {
+    if (!chat_can($cid) || !can('candidates', 'assign')) deny();
+    $st = portal_state($cid);
+    if ($st['active']) { flash('The candidate has already activated the portal.'); redirect('chat.php?c=' . $cid); }
+    $link = candidate_portal_login($cid);
+    $mail = candidate_welcome_email($cid, $link);
+    audit('portal-link-sent', 'candidates', $cid);
+    flash('Portal link ready (valid 7 days). ' . $mail . ' You can also send it by WhatsApp below.');
+    redirect('chat.php?c=' . $cid);
+}
 if ($cid && is_post()) {
     if (!chat_can($cid)) deny('You do not have permission to open this chat. Only the assigned deployment team can, unless the Super Admin grants access.');
     $body = mb_substr(p('body'), 0, 4000);
@@ -31,7 +41,7 @@ $convs = rows("SELECT c.id, c.full_name, c.ref_no, c.stage,
     FROM candidates c WHERE c.archived=0 AND $w AND (c.deploy_officer IS NOT NULL OR c.team_id IS NOT NULL OR EXISTS (SELECT 1 FROM chat_messages m2 WHERE m2.candidate_id=c.id))
     ORDER BY last_id IS NULL, last_id DESC LIMIT 200", $p);
 
-echo '<div class="card chat' . ($cid && can('candidates') ? ' work' : '') . '"><div class="chat-list">';
+echo '<div class="card chat' . ($cid && can('candidates') ? ' work' : '') . ($cid ? ' has-open' : '') . '"><div class="chat-list">';
 if (!$convs) echo '<p class="muted pad">No conversations yet. A chat appears here when a candidate is assigned to you or your team.</p>';
 foreach ($convs as $c) {
     $last = $c['last_id'] ? (string)val('SELECT body FROM chat_messages WHERE id=?', [$c['last_id']]) : '';
@@ -46,11 +56,25 @@ else {
     $isPart = in_array((int)$u['id'], $parts, true);
     chat_mark_read_staff($cid);
     if (!$isPart && empty($_SESSION['chat_viewed_' . $cid])) { audit('chat-view', 'candidates', $cid, null, null, 'Opened by a non-participant with permission'); $_SESSION['chat_viewed_' . $cid] = 1; }
-    echo '<div class="card-h" style="padding:14px 16px 0"><h3>' . e($c['full_name']) . ' <span class="muted small">' . e($c['ref_no']) . '</span></h3>' . (can('candidates') ? '<a class="btn ghost sm" href="' . e(ent_url('candidates', $cid)) . '">Open candidate</a>' : '') . '</div>'
-        . '<p class="muted small" style="padding:0 16px;margin:4px 0 0">' . icon('lock', 13) . ' Private · Deployment team: ' . e($parts ? implode(', ', array_map('user_name', $parts)) : 'not assigned yet') . '</p>';
+    $st = portal_state($cid);
+    $wa = wa_link($c['whatsapp'] ?: $c['phone']);
+    echo '<div class="chat-head"><a class="ch-back" href="chat.php" aria-label="All chats">' . icon('arrow-left', 18) . '</a><span class="avatar">' . e(strtoupper(substr($c['full_name'], 0, 1))) . '</span><div class="ch-name"><b>' . e($c['full_name']) . '</b><small>' . e($c['applied_position']) . ' · ' . ($st['active'] ? '<span class="dot-ok"></span> Portal active' : '<span class="dot-wait"></span> Portal not active yet') . '</small></div><div class="ch-acts">'
+        . ($wa ? '<a class="btn wa sm" href="' . e($wa) . '" target="_blank" rel="noopener" title="Chat on WhatsApp">' . icon('whatsapp', 15) . ' <span>WhatsApp</span></a>' : '')
+        . '<a class="btn ghost sm" href="tel:' . e(preg_replace('/[^\d+]/', '', $c['phone'])) . '" title="Call">' . icon('phone', 15) . '</a>'
+        . (can('candidates') ? '<a class="btn ghost sm hide-m" href="' . e(ent_url('candidates', $cid)) . '">Open candidate</a>' : '') . '</div></div>'
+        . '<p class="muted small ch-team">' . icon('lock', 13) . ' Private · Deployment team: ' . e($parts ? implode(', ', array_map('user_name', $parts)) : 'not assigned yet') . '</p>';
     if (!$isPart) echo '<div class="alert warn" style="margin:10px 16px 0">You are viewing this chat with special permission. Your access is recorded in the audit log.</div>';
+    if (!$st['active'] && can('candidates', 'assign')) {
+        echo '<div class="portal-strip"><div>' . icon('link', 18) . ' <b>Portal not active.</b> Send the portal link so the candidate can sign up and chat here.' . ($st['expires'] ? ' <small class="muted">Current link valid until ' . e(dtfmt($st['expires'])) . '.</small>' : '') . '</div><div class="action-bar">';
+        if ($st['link']) {
+            $msg = 'Hello ' . $c['full_name'] . ', this is RH Management. Please open this link to activate your candidate portal and chat with your deployment team: ' . $st['link'];
+            echo ($wa ? '<a class="btn wa sm" href="' . e(wa_link($c['whatsapp'] ?: $c['phone'], $msg)) . '" target="_blank" rel="noopener">' . icon('whatsapp', 14) . ' Send link by WhatsApp</a>' : '')
+                . '<input id="plink" class="sr-only" readonly value="' . e($st['link']) . '"><button type="button" class="btn ghost sm" data-copy="plink">' . icon('copy', 14) . ' Copy link</button>';
+        }
+        echo '<form method="post" action="chat.php?c=' . $cid . '">' . csrf_field() . '<input type="hidden" name="do" value="sendlink"><button class="btn sm">' . icon('send', 14) . ' ' . ($st['link'] ? 'Email the link again' : 'Send portal link') . '</button></form></div></div>';
+    }
     echo '<div class="msgs" id="msgs">' . chat_messages_html($cid, 'staff') . '</div>'
-        . '<form method="post" enctype="multipart/form-data" class="chat-form" action="chat.php?c=' . $cid . '">' . csrf_field() . '<div style="flex:1"><textarea name="body" rows="2" placeholder="Type a message to the candidate…" maxlength="4000"></textarea><input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="margin-top:6px;font-size:12px"></div><button class="btn">' . icon('send', 15) . ' Send</button></form>'
+        . ($st['active'] ? chat_composer('chat.php?c=' . $cid, 'Type a message…') : '<div class="composer-off">' . icon('lock', 15) . ' Messages open as soon as the candidate activates the portal. Until then, use WhatsApp' . ($wa ? '' : ' or phone') . '.</div>')
         . '<script nonce="' . csp_nonce() . '">(function(){var m=document.getElementById("msgs"),last=m.innerHTML;m.scrollTop=m.scrollHeight;setInterval(function(){if(document.hidden)return;fetch("chat.php?c=' . $cid . '&frag=1",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h!==null&&h!==last){var atEnd=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.innerHTML=h;last=h;if(atEnd)m.scrollTop=m.scrollHeight}}).catch(function(){})},8000)})();</script>';
 }
 echo '</div>';

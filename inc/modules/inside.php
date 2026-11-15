@@ -50,9 +50,9 @@ ent('candidates', ['notify_new' => [null], 'label' => 'Candidates', 'prefix' => 
     'after_save' => function ($id, $d, $old) {
         if (!$old) {
             ins('stage_history', ['entity' => 'candidates', 'entity_id' => $id, 'from_stage' => null, 'to_stage' => $d['stage'], 'reason' => 'Registered at Reception', 'by_user' => me()['id'], 'by_name' => me()['name'], 'at' => now()]);
-            if (!empty($d['hr_officer'])) notify($d['hr_officer'], 'New candidate entered: ' . $d['full_name'] . ($d['applied_position'] ? ', applying for ' . $d['applied_position'] : '') . '.', ent_url('candidates', $id), 'assigned');
+            if (!empty($d['hr_officer'])) notify_msg($d['hr_officer'], 'hr_new', ['name' => $d['full_name'], 'position' => $d['applied_position']], ent_url('candidates', $id));
         } elseif (!empty($d['hr_officer']) && $old['hr_officer'] != $d['hr_officer']) {
-            notify($d['hr_officer'], 'New candidate entered: ' . ($d['full_name'] ?? $old['full_name']) . '.', ent_url('candidates', $id), 'assigned');
+            notify_msg($d['hr_officer'], 'hr_new', ['name' => $d['full_name'] ?? $old['full_name'], 'position' => $d['applied_position'] ?? $old['applied_position']], ent_url('candidates', $id));
             if ($old['stage'] === 'New') stage_advance('candidates', $id, 'HR Assigned', 'HR officer assigned');
         }
         if (!empty($d['email']) && $old && $d['email'] !== $old['email']) q('UPDATE candidate_logins SET username=? WHERE candidate_id=?', [$d['email'], $id]);
@@ -60,6 +60,7 @@ ent('candidates', ['notify_new' => [null], 'label' => 'Candidates', 'prefix' => 
     'can_edit' => function ($r) { return $r['stage'] !== 'Closed'; },
     'cols' => ['File' => function ($r) { $f = candidate_file($r['id']); return $f ? '<span class="ref">' . e($f['ref_no']) . '</span>' : '<span class="muted">—</span>'; }],
     'view' => function ($r) { candidate_overview($r); },
+    'simple' => function ($r) { return candidate_simple($r); },
     'view_after' => function ($r) { candidate_panels($r); },
     'actions' => candidate_actions(),
 ]);
@@ -248,7 +249,7 @@ function location_to_chat($cid, $locId)
     if (!$l || !function_exists('chat_add')) return;
     $txt = 'Interview location (' . ordinal($l['seq']) . '): ' . $l['company'] . ($l['position'] ? ' — ' . $l['position'] : '') . "\nDate & time: " . dtfmt($l['interview_at']) . "\nAddress: " . $l['location']
         . ($l['map_link'] ? "\nMap: " . $l['map_link'] : '') . ($l['contact'] ? "\nContact: " . $l['contact'] : '') . ($l['instructions'] ? "\nInstructions: " . $l['instructions'] : '')
-        . "\nAfter the interview, please mark the result under My Interview Locations.";
+        . "\nAfter the interview, please tell us the result under Interviews.";
     chat_add($cid, 'Staff', me()['id'] ?? null, $txt);
 }
 function candidate_file($cid) { return row('SELECT * FROM inside_files WHERE candidate_id=? AND archived=0 ORDER BY id DESC LIMIT 1', [$cid]); }
@@ -273,7 +274,7 @@ function create_inside_file($cid, $planId, $total, $advance, array $o = [])
         'advance_amount' => $advance, 'pay_method' => $o['pay_method'] ?? 'Cash', 'next_pay_date' => $o['next_pay_date'] ?? null, 'hr_owner' => $o['hr_owner'] ?? ($c['hr_officer'] ?: (me()['id'] ?? null)),
         'deploy_owner' => $o['deploy_owner'] ?? null, 'skills' => $o['skills'] ?? $c['skills'], 'status' => 'Open', 'created_by' => me()['id'] ?? null, 'created_at' => now(), 'archived' => 0]);
     audit('create', 'inside_files', $id, null, ['candidate' => $c['ref_no'], 'total' => $total, 'advance' => $advance, 'next_pay_date' => $o['next_pay_date'] ?? null]);
-    if ($advance > 0) record_payment('inside_files', $id, $advance, ['method' => $o['pay_method'] ?? 'Cash', 'pay_type' => 'File Opening Advance', 'party' => $c['full_name'], 'pay_date' => today()]);
+    if ($advance > 0) record_payment('inside_files', $id, $advance, ['method' => $o['pay_method'] ?? 'Cash', 'pay_type' => 'File Opening Advance', 'party' => $c['full_name'], 'pay_date' => today(), 'silent' => true]);
     q("UPDATE candidates SET file_decision='Yes', updated_at=? WHERE id=?", [now(), $cid]);
     if (array_search($c['stage'], CAND_STAGES, true) < array_search('File Opened', CAND_STAGES, true)) stage_advance('candidates', $cid, 'File Opened', 'Inside file opened');
     return $id;
@@ -285,13 +286,14 @@ function candidate_portal_login($cid, $renew = false)
     $c = row('SELECT * FROM candidates WHERE id=?', [$cid]);
     $l = row('SELECT * FROM candidate_logins WHERE candidate_id=?', [$cid]);
     $token = bin2hex(random_bytes(16));
+    $user = $c['email'] ? strtolower(trim($c['email'])) : (preg_replace('/\D/', '', (string)$c['phone']) ?: null);
     $exp = date('Y-m-d H:i:s', strtotime('+7 days'));
     if (!$l) {
-        ins('candidate_logins', ['candidate_id' => $cid, 'username' => $c['email'] ? strtolower(trim($c['email'])) : null, 'legacy_slug' => strtolower(preg_replace('/[^a-z0-9]+/i', '.', $c['full_name'])) . '.' . $cid,
+        ins('candidate_logins', ['candidate_id' => $cid, 'username' => $user, 'legacy_slug' => strtolower(preg_replace('/[^a-z0-9]+/i', '.', $c['full_name'])) . '.' . $cid,
             'token' => $token, 'token_expires' => $exp, 'created_at' => now()]);
         audit('portal-login-created', 'candidates', $cid);
     } elseif ($renew || !$l['token'] || $l['token_expires'] < now()) {
-        q('UPDATE candidate_logins SET token=?, token_expires=?, username=COALESCE(username,?) WHERE candidate_id=?', [$token, $exp, $c['email'] ? strtolower($c['email']) : null, $cid]);
+        q('UPDATE candidate_logins SET token=?, token_expires=?, username=COALESCE(username,?) WHERE candidate_id=?', [$token, $exp, $user, $cid]);
         audit('registration-link', 'candidates', $cid);
     }
     $l = row('SELECT * FROM candidate_logins WHERE candidate_id=?', [$cid]);
@@ -326,12 +328,69 @@ function candidate_journey($c)
 }
 function candidate_overview($c)
 {
+    if (candidate_simple($c) && !g('full')) { candidate_simple_screen($c); return; }
     $f = candidate_file($c['id']);
     if ($c['stage'] === 'Closed' && $f) echo '<div class="banner">' . icon('lock', 20) . ' This file is closed (' . e($f['close_reason']) . ' · ' . e(dtfmt($f['closed_at'])) . '). It cannot advance further.</div>';
     card_open(icon('activity', 17) . ' Candidate journey', ($c['cv_file'] ? file_link($c['cv_file'], 'Download CV') : '<span class="badge b-bad">No CV</span>') . (function_exists('chat_participants') && chat_participants($c['id']) && chat_can($c['id']) ? ' <a class="btn ghost sm" href="chat.php?c=' . (int)$c['id'] . '">' . icon('chat', 14) . ' Private chat</a>' : ''));
     candidate_journey($c);
     card_close();
     if ($c['cv_file']) { card_open(icon('file-text', 17) . ' CV'); echo cv_preview($c['cv_file'], true); card_close(); }
+}
+/** Alerts when HR finishes a file: Reception (assign deployment, no money mentioned) and the Super Admin (file + payment). */
+function file_done_notify($r, $paid)
+{
+    $v = ['name' => $r['full_name'], 'position' => $r['applied_position'], 'amount' => money($paid)];
+    notify_role('Reception', voice_text('reception_file', $v), ent_url('candidates', $r['id']), 'file');
+    notify_super(voice_text('admin_file', $v), ent_url('candidates', $r['id']), 'payment');
+}
+/** HR / Reception see a short screen while the candidate is with them. */
+function candidate_simple($r)
+{
+    if (is_super() || $r['stage'] === 'Closed' || $r['archived']) return false;
+    $f = candidate_file($r['id']);
+    if (!$f) return in_array($r['stage'], ['New', 'HR Assigned', 'Interviewed'], true) && can('candidates', 'approve');
+    return $r['stage'] === 'File Opened' && can('candidates', 'assign');
+}
+/** Basic details + CV + one box: "File done" (interview result & payment), then "Assign to deployment team". */
+function candidate_simple_screen($c)
+{
+    $id = (int)$c['id'];
+    $f = candidate_file($id);
+    $o = $_SESSION['hr_old'] ?? [];
+    unset($_SESSION['hr_old']);
+    $tel = function ($n) { return $n ? '<a href="tel:' . e(preg_replace('/[^\d+]/', '', $n)) . '">' . e($n) . '</a>' : '—'; };
+    echo '<div class="grid g2 simple-top"><div class="card"><div class="card-h"><h3>' . icon('user', 17) . ' Candidate</h3>' . badge($c['stage']) . '</div><div class="kv kv-list">'
+        . '<div class="hl"><span>Name</span><b>' . e($c['full_name']) . '</b></div><div><span>Applying for</span><b>' . e($c['applied_position']) . '</b></div>'
+        . '<div><span>Phone</span><b>' . $tel($c['phone']) . '</b></div>' . ($c['whatsapp'] ? '<div><span>WhatsApp</span><b>' . $tel($c['whatsapp']) . '</b></div>' : '')
+        . '<div><span>Nationality</span><b>' . e($c['nationality']) . '</b></div><div><span>Visa</span><b>' . e($c['visa_type'] ?: '—') . ($c['visa_expiry'] ? ' · until ' . e(dfmt($c['visa_expiry'])) : '') . '</b></div>'
+        . ($c['passport_no'] ? '<div><span>Passport</span><b>' . e($c['passport_no']) . '</b></div>' : '') . ($c['experience'] ? '<div><span>Experience</span><b>' . e(mb_strimwidth($c['experience'], 0, 160, '…')) . '</b></div>' : '')
+        . ($c['expected_salary'] ? '<div><span>Expected salary</span><b>' . money($c['expected_salary']) . '</b></div>' : '') . '</div></div>';
+    echo '<div class="card"><div class="card-h"><h3>' . icon('file-text', 17) . ' CV</h3></div>' . ($c['cv_file'] ? cv_preview($c['cv_file'], true) : '<div class="empty">' . icon('file-text', 30) . '<p>No CV was added. Reception can add a file or a photo with Edit.</p></div>') . '</div></div>';
+
+    $act = function ($a) use ($id) { return e('candidates.php?t=all&a=act&id=' . $id . '&act=' . $a); };
+    if (!$f) {
+        $sel = function ($name, array $opts, $cur, $extra = '') { $h = '<select name="' . $name . '"' . $extra . '>'; foreach ($opts as $v => $l) $h .= '<option value="' . e($v) . '"' . ((string)$cur === (string)$v ? ' selected' : '') . '>' . e($l) . '</option>'; return $h . '</select>'; };
+        $methods = []; foreach (options('payment_methods') as $m) $methods[$m] = $m;
+        echo '<div class="card done-box"><div class="card-h"><h3>' . icon('check-circle', 18) . ' Interview result &amp; payment</h3></div>'
+            . '<form method="post" action="' . $act('hrdone') . '" data-confirm="Save the result for ' . e($c['full_name']) . '?">' . csrf_field() . '<div class="grid-form">'
+            . '<div class="fld"><label>Interview result *</label>' . $sel('result', ['Selected' => 'Selected — open the file', 'Not selected' => 'Not selected', 'On hold' => 'On hold / will come later'], $o['result'] ?? 'Selected', ' data-switch="res"') . '</div>'
+            . '<div class="fld" data-when="res=Selected"><label>Agreed total payment *</label><input type="number" step="0.01" min="0" name="agreed_total" data-pay-total value="' . e($o['agreed_total'] ?? '') . '" placeholder="e.g. 3500"></div>'
+            . '<div class="fld" data-when="res=Selected"><label>Paid now? *</label>' . $sel('paid_yes', ['Yes' => 'Yes — paid now', 'No' => 'No — nothing paid now'], $o['paid_yes'] ?? 'Yes', ' data-switch="paid"') . '</div>'
+            . '<div class="fld" data-when="res=Selected paid=Yes"><label>Amount paid now *</label><input type="number" step="0.01" min="0" name="paid_now" data-pay-paid value="' . e($o['paid_now'] ?? '') . '"><small class="muted">Saved with today\'s date (' . e(dfmt(today())) . ').</small></div>'
+            . '<div class="fld" data-when="res=Selected paid=Yes"><label>Payment method</label>' . $sel('pay_method', $methods, $o['pay_method'] ?? 'Cash') . '</div>'
+            . '<div class="fld" data-when="res=Selected"><label>Pays later</label><div class="ro big" data-pay-left>—</div></div>'
+            . '<div class="fld" data-when="res=Selected"><label>Date for the later payment</label><input type="date" name="next_pay_date" min="' . today() . '" value="' . e($o['next_pay_date'] ?? '') . '"></div>'
+            . '<div class="fld wide"><label>Note <span class="muted" data-when="res=Selected">(optional)</span></label><input name="notes" maxlength="500" value="' . e($o['notes'] ?? '') . '" placeholder="Short note about the interview"></div>'
+            . '</div><div class="form-actions"><button class="btn big">' . icon('check', 16) . ' File done</button></div></form></div>';
+        return;
+    }
+    $m = file_money($f);
+    echo '<div class="card done-box ok"><div class="card-h"><h3>' . icon('check-circle', 18) . ' File done · <span class="ref">' . e($f['ref_no']) . '</span></h3></div><div class="kv">'
+        . '<div><span>Agreed total</span><b>' . money($m['agreed']) . '</b></div><div class="good"><span>Paid</span><b>' . money($m['paid']) . '</b></div>'
+        . '<div class="' . ($m['balance'] > 0 ? 'warn' : 'good') . '"><span>Pays later</span><b>' . money(max(0, $m['balance'])) . '</b></div><div><span>Later payment date</span><b>' . e($m['next'] ? dfmt($m['next']) : '—') . '</b></div></div>';
+    echo '<form method="post" class="assign-row" action="' . $act('deploy') . '">' . csrf_field() . '<input type="hidden" name="_back" value="' . e(ent_url('candidates', $id)) . '"><h4>' . icon('send', 16) . ' Assign to deployment team</h4><div class="grid-form"><div class="fld"><label>Team</label><select name="team_id"><option value="">— Choose team —</option>';
+    foreach (rows('SELECT * FROM deployment_teams WHERE archived=0 ORDER BY name') as $t) echo '<option value="' . $t['id'] . '">' . e($t['name']) . '</option>';
+    echo '</select></div><div class="fld"><label>or Officer</label>' . deploy_select('deploy_officer') . '</div></div><div class="form-actions"><button class="btn big">' . icon('send', 16) . ' Assign to deployment team</button></div><p class="muted small">The deployment team gets an alert and the private chat opens. HR or Reception can do this.</p></form></div>';
 }
 /** CV viewer: PDF and photos open right on the page; Word files are downloaded. */
 function cv_preview($path, $open = false)
@@ -484,10 +543,10 @@ function candidate_actions()
                 upd('candidates', $r['id'], ['hr_officer' => $uid, 'updated_at' => now(), 'updated_by' => me()['id']]);
                 audit('assign-hr', 'candidates', $r['id'], ['hr_officer' => $r['hr_officer']], ['hr_officer' => $uid]);
                 if ($r['stage'] === 'New') stage_advance('candidates', $r['id'], 'HR Assigned', 'Assigned to ' . user_name($uid));
-                notify($uid, 'New candidate entered: ' . $r['full_name'] . ($r['applied_position'] ? ', applying for ' . $r['applied_position'] : '') . '.', ent_url('candidates', $r['id']), 'assigned');
+                notify_msg($uid, 'hr_new', ['name' => $r['full_name'], 'position' => $r['applied_position']], ent_url('candidates', $r['id']));
                 return ['msg' => 'Assigned to ' . user_name($uid) . '.'];
             }],
-        'interview' => ['label' => 'Interview', 'icon' => 'clipboard', 'perm' => 'approve', 'show' => function ($r) { return in_array($r['stage'], ['New', 'HR Assigned', 'Interviewed'], true); },
+        'interview' => ['label' => 'Interview', 'icon' => 'clipboard', 'perm' => 'approve', 'simple_hide' => true, 'show' => function ($r) { return in_array($r['stage'], ['New', 'HR Assigned', 'Interviewed'], true); },
             'form' => function ($r) {
                 echo '<div class="grid-form"><div class="fld"><label>Interview outcome *</label><select name="interview_status" required>';
                 foreach (['Pending', 'Selected', 'Rejected', 'On Hold'] as $s) echo '<option' . ($r['interview_status'] === $s ? ' selected' : '') . '>' . $s . '</option>';
@@ -503,7 +562,37 @@ function candidate_actions()
                 if ($st === 'Selected' && p('attendance') === 'Attended') return ['msg' => 'Interview recorded: Selected. Now confirm the file: choose the fee plan and enter the advance paid today.', 'go' => ent_url('candidates', $r['id']) . '&act=file'];
                 return ['msg' => 'Interview recorded: ' . $st . '.'];
             }],
-        'file' => ['label' => 'File done', 'icon' => 'folder', 'perm' => 'approve', 'show' => function ($r) { return $r['stage'] === 'Interviewed' && !candidate_file($r['id']); },
+        'hrdone' => ['label' => 'Interview result', 'icon' => 'check', 'perm' => 'approve', 'hidden' => true, 'form' => function ($r) {},
+            'show' => function ($r) { return in_array($r['stage'], ['New', 'HR Assigned', 'Interviewed'], true) && !candidate_file($r['id']); },
+            'do' => function ($r) {
+                $back = ent_url('candidates', $r['id']);
+                $fail = function ($m) use ($back) { flash($m, 'bad'); $_SESSION['hr_old'] = $_POST; redirect($back); };
+                $res = p('result');
+                $map = ['Selected' => 'Selected', 'Not selected' => 'Rejected', 'On hold' => 'On Hold'];
+                if (!isset($map[$res])) $fail('Choose the interview result.');
+                $note = trim(p('notes'));
+                if ($res !== 'Selected' && $note === '') $fail('Write a short reason.');
+                $total = (float)p('agreed_total');
+                $paid = p('paid_yes') === 'Yes' ? (float)p('paid_now') : 0.0;
+                if ($res === 'Selected') {
+                    if ($total <= 0) $fail('Enter the agreed total payment.');
+                    if (p('paid_yes') === 'Yes' && $paid <= 0) $fail('Enter the amount paid now, or choose "No" for payment now.');
+                    if ($paid > $total) $fail('The amount paid now cannot be more than the agreed total.');
+                    if ($paid < $total && !p('next_pay_date')) $fail('Choose the date for the remaining payment.');
+                }
+                upd('candidates', $r['id'], ['interview_status' => $map[$res], 'interview_notes' => $note ?: $r['interview_notes'], 'interviewed_at' => now(), 'hr_officer' => $r['hr_officer'] ?: me()['id'], 'updated_at' => now(), 'updated_by' => me()['id']]);
+                audit('interview', 'candidates', $r['id'], ['interview_status' => $r['interview_status']], ['interview_status' => $map[$res]], $note ?: null);
+                stage_advance('candidates', $r['id'], 'Interviewed', 'Interview: ' . $map[$res]);
+                if ($res !== 'Selected') {
+                    upd('candidates', $r['id'], ['file_decision' => 'No', 'decision_reason' => $res . ': ' . $note]);
+                    return ['msg' => 'Saved: ' . $res . '.'];
+                }
+                $fid = create_inside_file($r['id'], null, $total, $paid, ['pay_method' => p('pay_method') ?: 'Cash', 'next_pay_date' => $paid < $total ? p('next_pay_date') : null]);
+                if (is_string($fid)) $fail($fid);
+                file_done_notify($r, $paid);
+                return ['msg' => 'File ' . e(val('SELECT ref_no FROM inside_files WHERE id=?', [$fid])) . ' done. Reception has been told. You can assign the deployment team below, or leave it to Reception.'];
+            }],
+        'file' => ['label' => 'File done', 'icon' => 'folder', 'perm' => 'approve', 'simple_hide' => true, 'show' => function ($r) { return $r['stage'] === 'Interviewed' && !candidate_file($r['id']); },
             'form' => function ($r) {
                 echo '<div class="grid-form"><div class="fld wide"><label>Open a file for this candidate? *</label><label class="check"><input type="radio" name="decision" value="Yes" checked> Yes — candidate selected, open the file</label> &nbsp; <label class="check"><input type="radio" name="decision" value="No"> No</label></div>'
                     . '<div class="fld"><label>Agreed total payment *</label><input type="number" step="0.01" min="0" name="agreed_total" data-pay-total placeholder="e.g. 3500"></div>'
@@ -529,10 +618,10 @@ function candidate_actions()
                 $res = create_inside_file($r['id'], null, $total, $paid, ['pay_method' => p('pay_method') ?: 'Cash', 'next_pay_date' => p('next_pay_date') ?: null]);
                 if (is_string($res)) return $res;
                 $ref = val('SELECT ref_no FROM inside_files WHERE id=?', [$res]);
-                notify_role('Reception', 'Candidate selected: ' . $r['full_name'] . '. Please assign the deployment team.', 'reception.php?t=ready', 'file');
+                file_done_notify($r, $paid);
                 return ['msg' => 'File ' . e($ref) . ' done. Reception has been notified. Assign the deployment team now below, or leave it to Reception.', 'go' => ent_url('candidates', $r['id']) . '&act=deploy'];
             }],
-        'deploy' => ['label' => 'Deploy', 'icon' => 'send', 'perm' => 'assign', 'show' => function ($r) { return in_array($r['stage'], ['File Opened', 'In Deployment'], true); },
+        'deploy' => ['label' => 'Deploy', 'icon' => 'send', 'perm' => 'assign', 'simple_hide' => true, 'show' => function ($r) { return in_array($r['stage'], ['File Opened', 'In Deployment'], true); },
             'form' => function ($r) use ($userSel) {
                 echo '<div class="grid-form"><div class="fld"><label>Deployment team</label><select name="team_id"><option value="">— None —</option>';
                 foreach (rows('SELECT * FROM deployment_teams WHERE archived=0 ORDER BY name') as $t) echo '<option value="' . $t['id'] . '"' . ($r['team_id'] == $t['id'] ? ' selected' : '') . '>' . e($t['name']) . '</option>';
@@ -549,7 +638,7 @@ function candidate_actions()
                 audit('deploy', 'candidates', $r['id'], ['team_id' => $r['team_id'], 'deploy_officer' => $r['deploy_officer']], ['team_id' => $team, 'deploy_officer' => $off]);
                 stage_advance('candidates', $r['id'], 'In Deployment', 'Assigned to deployment');
                 $link = candidate_portal_login($r['id']);
-                foreach (chat_participants($r['id']) as $pid) if ((int)$pid !== (int)me()['id']) notify($pid, 'New file ready for deployment: ' . $r['full_name'] . ($r['applied_position'] ? ', ' . $r['applied_position'] : '') . '.', 'chat.php?c=' . $r['id'], 'deploy');
+                foreach (chat_participants($r['id']) as $pid) if ((int)$pid !== (int)me()['id']) notify_msg($pid, 'deploy_new', ['name' => $r['full_name'], 'position' => $r['applied_position']], 'chat.php?c=' . $r['id']);
                 $mail = candidate_welcome_email($r['id'], $link);
                 return ['msg' => 'Assigned to Deployment. ' . $mail . ' Registration link (valid 7 days): <a href="' . e($link) . '">' . e($link) . '</a>'];
             }],
@@ -630,7 +719,7 @@ function candidate_actions()
                 stage_advance('candidates', $r['id'], 'Closed', $full);
                 return ['msg' => 'File closed. This is terminal.'];
             }],
-        'reglink' => ['label' => 'Registration link', 'icon' => 'link', 'perm' => 'assign', 'show' => function ($r) { return in_array($r['stage'], ['File Opened', 'In Deployment', 'Selected', 'Placed'], true); },
+        'reglink' => ['label' => 'Portal link', 'icon' => 'link', 'perm' => 'assign', 'show' => function ($r) { return in_array($r['stage'], ['File Opened', 'In Deployment', 'Selected', 'Placed'], true) && !val('SELECT password_hash FROM candidate_logins WHERE candidate_id=?', [$r['id']]); },
             'form' => function ($r) {
                 $l = row('SELECT * FROM candidate_logins WHERE candidate_id=?', [$r['id']]);
                 if ($l && $l['token'] && $l['token_expires'] > now()) {

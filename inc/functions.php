@@ -210,8 +210,36 @@ function notif_config()
     $saved = json_decode((string)setting('notif_config', ''), true) ?: [];
     $c = [];
     foreach (NOTIF_KINDS as $k => $d) $c[$k] = ['on' => (bool)($saved[$k]['on'] ?? true), 'sound' => $saved[$k]['sound'] ?? $d[1], 'icon' => $saved[$k]['icon'] ?? $d[2], 'label' => $d[0],
-        'voice' => (bool)($saved[$k]['voice'] ?? in_array($k, ['assigned', 'file', 'deploy', 'chat'], true))];
+        'voice' => (bool)($saved[$k]['voice'] ?? in_array($k, ['assigned', 'file', 'deploy', 'chat', 'lead', 'payment'], true))];
     return $c;
+}
+/** Spoken / written alert messages. The Super Admin edits the wording in Admin → Notification sounds. [who/when, alert type, default text] */
+const VOICE_MSGS = [
+    'hr_new' => ['HR — new candidate entered by Reception', 'assigned', 'New candidate entered: {name}, applying for {position}.'],
+    'reception_file' => ['Reception — HR finished the file', 'file', 'File done: {name}, {position}. Please assign the deployment team.'],
+    'deploy_new' => ['Deployment — new file assigned', 'deploy', 'New file ready for deployment: {name}, {position}.'],
+    'deploy_portal' => ['Deployment — candidate activated the portal', 'deploy', '{name} has activated the candidate portal. You can message the candidate now.'],
+    'deploy_chat' => ['Deployment — new message from a candidate', 'chat', 'New message from {name}.'],
+    'deploy_response' => ['Deployment — candidate answered an interview', 'deploy', '{name} replied to the {seq} interview: {response}.'],
+    'admin_file' => ['Super Admin — new file opened', 'payment', 'New file opened: {name}, {position}. Payment received: {amount}.'],
+    'admin_lead' => ['Super Admin — new enquiry or lead', 'lead', 'New {type} received: {name}.'],
+    'admin_payment' => ['Super Admin — payment received', 'payment', 'Payment received: {amount} from {party}.'],
+    'admin_deal' => ['Super Admin — deal won', 'payment', 'Deal done: {name}, value {amount}.'],
+];
+/** Text of an alert with {placeholders} filled in. */
+function voice_text($key, array $vars = [])
+{
+    static $saved = null;
+    if ($saved === null) $saved = json_decode((string)setting('voice_msgs', ''), true) ?: [];
+    $t = trim((string)($saved[$key] ?? '')) ?: (VOICE_MSGS[$key][2] ?? '');
+    $t = preg_replace_callback('/\{(\w+)\}/', function ($m) use ($vars) { return (string)($vars[$m[1]] ?? ''); }, $t);
+    $t = preg_replace(['/\s+([,.])/', '/,\s*,/', '/,\s*\./', '/\s{2,}/'], ['$1', ',', '.', ' '], $t);
+    return trim($t, " ,");
+}
+/** Notify one user with a configurable message. */
+function notify_msg($uid, $key, array $vars, $link = '')
+{
+    if ($uid) notify($uid, voice_text($key, $vars), $link, VOICE_MSGS[$key][1] ?? 'system');
 }
 /** System task (Tasks & Alerts). $key avoids duplicates for the same auto task. */
 function add_task($title, $severity = 'Medium', $due = null, $owner = null, $link = '', $key = null)
@@ -309,7 +337,7 @@ function record_payment($entity, $id, $amount, array $o = [])
     $jid = post_journal($o['pay_date'] ?? today(), ($dir === 'in' ? 'Receipt ' : 'Payment ') . $ref . ' - ' . $entity . ' #' . $id, $lines, 'payment', $pid);
     q('UPDATE payments SET journal_id=? WHERE id=?', [$jid, $pid]);
     audit('payment', $entity, $id, null, ['ref' => $ref, 'amount' => $amount, 'direction' => $dir, 'type' => $o['pay_type'] ?? null]);
-    if ($dir === 'in' && function_exists('notify_super') && function_exists('me') && me()) notify_super('Payment received ' . money($amount) . ' (' . $ref . ')', 'finance.php?t=ledger', 'payment');
+    if ($dir === 'in' && empty($o['silent']) && function_exists('notify_super') && function_exists('me') && me()) notify_super(voice_text('admin_payment', ['amount' => money($amount), 'party' => ($o['party'] ?? '') ?: 'a customer', 'ref' => $ref]), 'finance.php?t=ledger', 'payment');
     return $pid;
 }
 /** Reverse a payment: new negative entry with reason; original kept and flagged. */

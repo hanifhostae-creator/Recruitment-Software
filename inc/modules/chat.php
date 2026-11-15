@@ -80,7 +80,8 @@ function chat_linkify($text)
 function chat_messages_html($cid, $viewer)
 {
     $ms = rows('SELECT * FROM chat_messages WHERE candidate_id=? AND archived=0 ORDER BY id', [$cid]);
-    if (!$ms) return '<p class="muted">No messages yet. Say hello!</p>';
+    if (!$ms) return $viewer === 'staff' ? '<div class="chat-start">' . icon('chat', 30) . '<b>Start the conversation with ' . e(ent_title('candidates', $cid)) . '</b><span>Say hello and explain the next step. Interview locations you send also appear here.</span></div>'
+        : '<div class="chat-start">' . icon('chat', 30) . '<b>Your deployment team will write to you here</b><span>You can also send a message, a photo or your location.</span></div>';
     $meId = $viewer === 'staff' ? (int)me()['id'] : 0;
     $h = '';
     foreach ($ms as $m) {
@@ -88,7 +89,38 @@ function chat_messages_html($cid, $viewer)
         if ($m['sender_type'] === 'Candidate') $name = $viewer === 'candidate' ? 'You' : ent_title('candidates', $cid);
         else $name = ($viewer === 'staff' && $mine ? 'You' : user_name($m['sender_id'])) . ' · Deployment team';
         $seen = $mine ? ($m['read_at'] ? ' · Seen' : ' · Sent') : '';
-        $h .= '<div class="msg' . ($mine ? ' me' : '') . '"><small class="who">' . e($name) . '</small>' . chat_linkify($m['body']) . ($m['file'] ? '<div>' . file_link($m['file'], 'Attachment') . '</div>' : '') . '<small>' . e(dtfmt($m['created_at'])) . $seen . '</small></div>';
+        $img = $m['file'] && preg_match('/\.(jpe?g|png)$/i', $m['file']);
+        $att = $m['file'] ? ($img ? '<a class="msg-img" href="file.php?f=' . e(rawurlencode($m['file'])) . '" target="_blank" rel="noopener"><img src="file.php?f=' . e(rawurlencode($m['file'])) . '" alt="Photo" loading="lazy"></a>' : '<div>' . file_link($m['file'], 'Attachment') . '</div>') : '';
+        $h .= '<div class="msg' . ($mine ? ' me' : '') . '"><small class="who">' . e($name) . '</small>' . $att . chat_linkify($m['body']) . '<small>' . e(dtfmt($m['created_at'])) . $seen . '</small></div>';
     }
     return $h;
+}
+
+/** Message box like a phone messenger: attach, camera, location, text, send. */
+function chat_composer($action, $placeholder = 'Type a message…')
+{
+    return '<form method="post" enctype="multipart/form-data" class="composer" action="' . e($action) . '" data-composer>' . csrf_field()
+        . '<div class="comp-file" hidden><span data-comp-name></span><button type="button" class="link" data-comp-clear>Remove</button></div>'
+        . '<div class="comp-row"><label class="comp-btn" title="Attach a document">' . icon('paperclip', 19) . '<input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" data-comp-file hidden></label>'
+        . '<label class="comp-btn" title="Take a photo">' . icon('camera', 19) . '<input type="file" accept="image/*" capture="environment" data-comp-cam hidden></label>'
+        . '<button type="button" class="comp-btn" title="Send my location" data-comp-loc>' . icon('map-pin', 19) . '</button>'
+        . '<textarea name="body" rows="1" placeholder="' . e($placeholder) . '" maxlength="4000" data-comp-text></textarea>'
+        . '<button class="comp-send" aria-label="Send">' . icon('send', 18) . '</button></div></form>';
+}
+/** WhatsApp link for a phone number (UAE local numbers 05x become 9715x). */
+function wa_link($num, $text = '')
+{
+    $d = preg_replace('/\D/', '', (string)$num);
+    if ($d === '') return '';
+    if (strpos($d, '00') === 0) $d = substr($d, 2);
+    elseif ($d[0] === '0') $d = '971' . substr($d, 1);
+    return 'https://wa.me/' . $d . ($text !== '' ? '?text=' . rawurlencode($text) : '');
+}
+/** Candidate portal state: ['active' => bool, 'link' => valid registration link or null, 'expires' => …]. */
+function portal_state($cid)
+{
+    $l = row('SELECT * FROM candidate_logins WHERE candidate_id=?', [$cid]);
+    if ($l && $l['password_hash']) return ['active' => true, 'link' => null, 'expires' => null, 'last' => $l['last_login']];
+    $ok = $l && $l['token'] && $l['token_expires'] >= now();
+    return ['active' => false, 'link' => $ok ? portal_base_url() . 'portal.php?register=' . $l['token'] : null, 'expires' => $ok ? $l['token_expires'] : null, 'last' => null];
 }

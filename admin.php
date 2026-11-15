@@ -33,6 +33,10 @@ if (is_post()) {
         foreach (NOTIF_KINDS as $k => $d) $cfg[$k] = ['on' => !empty($_POST['on'][$k]), 'sound' => isset(NOTIF_SOUNDS[$_POST['sound'][$k] ?? '']) ? $_POST['sound'][$k] : $d[1], 'icon' => preg_replace('/[^a-z-]/', '', (string)($_POST['icon'][$k] ?? $d[2])), 'voice' => !empty($_POST['voice'][$k])];
         set_setting('notif_config', json_encode($cfg));
         audit('notification-settings', 'settings', null, null, $cfg);
+        $vm = [];
+        foreach (VOICE_MSGS as $k => $d) { $v = trim(mb_substr((string)($_POST['msg'][$k] ?? ''), 0, 300)); if ($v !== '' && $v !== $d[2]) $vm[$k] = $v; }
+        $oldVm = json_decode((string)setting('voice_msgs', ''), true) ?: [];
+        if ($vm != $oldVm) { set_setting('voice_msgs', json_encode($vm)); audit('voice-messages', 'settings', null, $oldVm, $vm); }
         flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
         redirect('admin.php?t=sounds');
     }
@@ -112,6 +116,15 @@ if ($t === 'sounds') {
         echo '</select></td><td><button type="button" class="btn ghost sm" data-test-sound="snd_' . $k . '">' . icon('volume', 14) . ' Test</button></td><td><select name="icon[' . $k . ']">';
         foreach ($icons as $ic) echo '<option value="' . $ic . '"' . ($c['icon'] === $ic ? ' selected' : '') . '>' . e(ucwords(str_replace('-', ' ', $ic))) . '</option>';
         echo '</select></td></tr>';
+    }
+    echo '</tbody></table></div>';
+    $vm = json_decode((string)setting('voice_msgs', ''), true) ?: [];
+    echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Spoken messages</h3></div><p class="muted small" style="padding:0 18px">The words shown in the alert and read aloud. Keep the words in curly brackets — they are replaced with the real name, position or amount. Leave a box empty to use the standard text.</p>'
+        . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Who hears it / when</th><th>Message</th><th></th></tr></thead><tbody>';
+    foreach (VOICE_MSGS as $k => $d) {
+        preg_match_all('/\{\w+\}/', $d[2], $ph);
+        echo '<tr><td><b>' . e($d[0]) . '</b><br><small class="muted">Words: ' . e(implode(' ', $ph[0])) . '</small></td><td style="min-width:260px"><input id="vm_' . $k . '" name="msg[' . $k . ']" maxlength="300" value="' . e($vm[$k] ?? $d[2]) . '" placeholder="' . e($d[2]) . '"></td>'
+            . '<td><button type="button" class="btn ghost sm" data-say-input="vm_' . $k . '">' . icon('volume', 14) . ' Listen</button></td></tr>';
     }
     echo '</tbody></table></div><div class="form-actions" style="padding:0 18px 16px"><button class="btn">' . icon('check', 15) . ' Save alert settings</button></div></form>';
 }

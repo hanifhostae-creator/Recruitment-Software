@@ -28,6 +28,9 @@ function icon($name, $size = 18)
         'bell' => '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
         'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+        'paperclip' => '<path d="m21 11-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4L15.8 7"/>',
+        'camera' => '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
+        'whatsapp' => '<path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.3-1.9-1-0.9.8a4 4 0 0 1-2-2l.8-.9-1-1.9z"/>',
         'map-pin' => '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
         'globe' => '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/>',
         'phone' => '<path d="M5 3h4l2 5-2.5 1.5a11 11 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A17 17 0 0 1 3 5a2 2 0 0 1 2-2z"/>',
@@ -134,6 +137,12 @@ function page_start($title, $active = null, $showFlash = true)
     }
     echo '</div></header><main id="main" class="content">';
     if ($showFlash) foreach (flash() as $f) echo '<div class="alert ' . e($f[0]) . '" role="status">' . $f[1] . '</div>';
+    if (!empty($_SESSION['say_note'])) {
+        $sn = $_SESSION['say_note'];
+        unset($_SESSION['say_note']);
+        $nc = notif_config()[$sn['kind']] ?? notif_config()['system'];
+        echo '<div class="say-bar" role="status"><span class="say-ico">' . icon($nc['icon'], 18) . '</span><div><small>' . e($nc['label']) . '</small><b>' . e($sn['text']) . '</b></div><button type="button" class="btn sm" data-say="' . e($sn['text']) . '">' . icon('volume', 15) . ' Repeat voice</button></div>';
+    }
 }
 
 function page_end()
@@ -154,13 +163,16 @@ function portal_start($title, $portalName, array $nav = [], $active = '', $logou
     html_head($title);
     $poll = !empty($_SESSION['portal']) && $_SESSION['portal']['type'] === 'candidate';
     $since = $poll ? (int)val("SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE candidate_id=? AND sender_type='Staff'", [$_SESSION['portal']['id']]) : 0;
-    echo '<body class="portal"' . ($poll ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><header class="p-top"><a class="brand" href="?"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>' . e($portalName) . '</small></span></a>';
+    echo '<body class="portal' . ($nav && is_array(reset($nav)) ? ' p-app' : '') . '"' . ($poll ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><header class="p-top"><a class="brand" href="?"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>' . e($portalName) . '</small></span></a>';
     if ($nav) {
         echo '<nav class="p-nav">';
-        foreach ($nav as $k => $l) echo '<a class="' . ($k === $active ? 'on' : '') . '" href="?p=' . e($k) . '">' . e($l) . '</a>';
+        foreach ($nav as $k => $l) {
+            if (is_array($l)) echo '<a class="' . ($k === $active ? 'on' : '') . '" href="?p=' . e($k) . '">' . icon($l[1], 20) . '<span>' . e($l[0]) . '</span>' . (!empty($l[2]) ? '<em class="nb">' . (int)$l[2] . '</em>' : '') . '</a>';
+            else echo '<a class="' . ($k === $active ? 'on' : '') . '" href="?p=' . e($k) . '">' . e($l) . '</a>';
+        }
         echo '</nav>';
     }
-    if ($logout) echo '<a class="btn ghost sm" href="' . e($logout) . '">' . icon('logout', 15) . ' Log out</a>';
+    if ($logout) echo '<a class="btn ghost sm p-logout" href="' . e($logout) . '">' . icon('logout', 15) . ' <span>Log out</span></a>';
     echo ($poll ? sound_button() : '') . '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 18) . '</button></header><main class="p-main" id="main">';
     foreach (flash() as $f) echo '<div class="alert ' . e($f[0]) . '" role="status">' . $f[1] . '</div>';
 }

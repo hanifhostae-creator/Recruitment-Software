@@ -509,7 +509,8 @@ function crud_save($d, $base, $mod, array $opt)
         $rec = row('SELECT * FROM ' . $d['table'] . ' WHERE id=?', [$id]);
         $title = 'New ' . strtolower($d['one']) . ': ' . ($rec ? ent_row_title($d, $rec) : '#' . $id);
         if (!empty($d['notify_new'][0])) notify_role($d['notify_new'][0], $title, ent_url($d['key'], $id), $d['notify_new'][1] ?? 'lead');
-        notify_super($title, ent_url($d['key'], $id), 'entry');
+        if (($d['notify_new'][1] ?? '') === 'lead') notify_super(voice_text('admin_lead', ['type' => strtolower($d['one']), 'name' => $rec ? ent_row_title($d, $rec) : '#' . $id]), ent_url($d['key'], $id), 'lead');
+        else notify_super($title, ent_url($d['key'], $id), 'entry');
     }
     flash($d['one'] . ($isNew ? ' created.' : ' updated.'));
     redirect(u($base, ['a' => 'view', 'id' => $id]));
@@ -529,6 +530,7 @@ function crud_view($d, $base, $mod, $id, array $opt)
     if (!$locked && !$r['archived'] && can($mod, 'edit')) echo '<a class="btn ghost sm" href="' . e(u($base, ['a' => 'edit', 'id' => $id])) . '">' . icon('edit', 15) . ' Edit</a>';
     foreach ($d['actions'] as $ak => $act) {
         if (!empty($act['hidden']) || $r['archived'] || !can($mod, $act['perm'] ?? 'edit') || (isset($act['show']) && !$act['show']($r))) continue;
+        if (!empty($act['simple_hide']) && isset($d['simple']) && !g('full') && $d['simple']($r)) continue;
         echo '<a class="btn ' . (g('act') === $ak ? '' : 'ghost ') . 'sm" href="' . e(u($base, ['a' => 'view', 'id' => $id, 'act' => $ak])) . '">' . icon($act['icon'] ?? 'zap', 15) . ' ' . e($act['label']) . '</a>';
     }
     echo '</div></div>';
@@ -545,6 +547,11 @@ function crud_view($d, $base, $mod, $id, array $opt)
     }
 
     if (isset($d['view'])) $d['view']($r, $mod, $base);
+    // Simple screen for daily staff (e.g. HR): only the record's own panels; "Show all details" opens the rest.
+    if (isset($d['simple']) && !g('full') && $d['simple']($r)) {
+        echo '<p class="center"><a class="btn ghost sm" href="' . e(u($base, ['a' => 'view', 'id' => $id, 'full' => 1])) . '">' . icon('list', 14) . ' Show all details</a></p>';
+        return;
+    }
     echo '<div class="card"><div class="card-h"><h3>Details</h3></div><dl class="details">';
     foreach ($d['fields'] as $k => $f) {
         if ($f['type'] === 'password' || !field_allowed($f)) continue;

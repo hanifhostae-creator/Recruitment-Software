@@ -33,6 +33,18 @@
   }
   document.querySelectorAll('select[data-other]').forEach(function (s) { syncOther(s); s.addEventListener('change', function () { syncOther(s); }); });
 
+  // fields shown only for some choices: data-switch="res" on a select, data-when="res=Selected paid=Yes" on a box
+  function syncWhen(form) {
+    form.querySelectorAll('[data-when]').forEach(function (box) {
+      var ok = box.getAttribute('data-when').split(' ').every(function (c) {
+        var kv = c.split('='), sel = form.querySelector('[data-switch="' + kv[0] + '"]');
+        return !sel || sel.value === kv[1];
+      });
+      box.hidden = !ok;
+    });
+  }
+  document.querySelectorAll('form').forEach(function (f) { if (f.querySelector('[data-switch]')) { syncWhen(f); f.addEventListener('change', function () { syncWhen(f); }); } });
+
   // auto-submit filters
   document.querySelectorAll('[data-autosubmit]').forEach(function (el) { el.addEventListener('change', function () { el.form.submit(); }); });
 
@@ -116,8 +128,38 @@
   // remaining amount on the "File done" form
   document.querySelectorAll('[data-pay-total]').forEach(function (t) {
     var f = t.form, p = f.querySelector('[data-pay-paid]'), out = f.querySelector('[data-pay-left]');
-    function calc() { var a = parseFloat(t.value) || 0, b = parseFloat(p.value) || 0; out.textContent = a ? (a - b).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; out.style.color = a - b < 0 ? 'var(--bad)' : ''; }
-    t.addEventListener('input', calc); if (p) p.addEventListener('input', calc);
+    var yes = f.querySelector('[name="paid_yes"]');
+    function calc() { var a = parseFloat(t.value) || 0, b = yes && yes.value === 'No' ? 0 : (p ? parseFloat(p.value) || 0 : 0); out.textContent = a ? (a - b).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; out.style.color = a - b < 0 ? 'var(--bad)' : ''; }
+    t.addEventListener('input', calc); if (p) p.addEventListener('input', calc); if (yes) yes.addEventListener('change', calc); calc();
+  });
+
+  // chat message box: attach, camera photo, location, auto-growing text
+  document.querySelectorAll('[data-composer]').forEach(function (f) {
+    var file = f.querySelector('[data-comp-file]'), cam = f.querySelector('[data-comp-cam]'), txt = f.querySelector('[data-comp-text]'),
+      bar = f.querySelector('.comp-file'), nameEl = f.querySelector('[data-comp-name]');
+    function show() { var fl = file.files && file.files[0]; bar.hidden = !fl; if (fl) nameEl.textContent = (/^image\//.test(fl.type) ? '📷 ' : '📎 ') + fl.name; }
+    file.addEventListener('change', show);
+    if (cam) cam.addEventListener('change', function () {
+      if (!cam.files || !cam.files[0]) return;
+      try { var dt = new DataTransfer(); dt.items.add(new File([cam.files[0]], 'photo-' + Date.now() + '.jpg', { type: cam.files[0].type || 'image/jpeg' })); file.files = dt.files; }
+      catch (e) { cam.name = 'file'; file.name = ''; nameEl.textContent = '📷 Photo'; bar.hidden = false; return; }
+      show();
+    });
+    f.querySelector('[data-comp-clear]').addEventListener('click', function () { file.value = ''; if (cam) { cam.value = ''; cam.name = ''; file.name = 'file'; } show(); });
+    var loc = f.querySelector('[data-comp-loc]');
+    if (loc) loc.addEventListener('click', function () {
+      if (!navigator.geolocation) { alert('Location is not available on this device.'); return; }
+      loc.classList.add('busy');
+      navigator.geolocation.getCurrentPosition(function (p) {
+        loc.classList.remove('busy');
+        var link = 'https://maps.google.com/?q=' + p.coords.latitude.toFixed(6) + ',' + p.coords.longitude.toFixed(6);
+        txt.value = (txt.value ? txt.value + '\n' : '') + 'My location: ' + link; f.submit();
+      }, function () { loc.classList.remove('busy'); alert('Please allow location access in your browser, then try again.'); }, { enableHighAccuracy: true, timeout: 15000 });
+    });
+    function grow() { txt.style.height = 'auto'; txt.style.height = Math.min(txt.scrollHeight, 140) + 'px'; }
+    txt.addEventListener('input', grow);
+    txt.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 821px)').matches) { e.preventDefault(); if (txt.value.trim() || (file.files && file.files.length)) f.submit(); } });
+    f.addEventListener('submit', function (e) { if (!txt.value.trim() && !(file.files && file.files.length) && !(cam && cam.name)) e.preventDefault(); });
   });
 
   // CV camera: photograph a paper CV (several pages are joined into one image)
@@ -228,8 +270,8 @@
     b.addEventListener('click', function () { var sel = document.getElementById(b.getAttribute('data-test-sound')); unlock(); beep(true, sel ? sel.value : 'chime'); });
   });
   // spoken announcement (browser voice, English)
-  function speak(text) {
-    if (!text || !soundOn() || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+  function speak(text, force) {
+    if (!text || (!force && !soundOn()) || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
     try {
       var u = new SpeechSynthesisUtterance(text), vs = window.speechSynthesis.getVoices(), v = null, i;
       for (i = 0; i < vs.length && !v; i++) if (/^en-GB/i.test(vs[i].lang) && /female|serena|kate|libby|sonia/i.test(vs[i].name)) v = vs[i];
@@ -239,15 +281,32 @@
     } catch (e) {}
   }
   if (window.speechSynthesis) window.speechSynthesis.getVoices();
-  function toast(text, link, label, iconHtml) {
+  function toast(text, link, label, iconHtml, say) {
     var box = document.getElementById('toasts'); if (!box) return;
-    var a = document.createElement(link ? 'a' : 'div'); a.className = 'toast'; if (link) a.href = link;
+    var w = document.createElement('div'); w.className = 'toast';
+    var a = document.createElement(link ? 'a' : 'div'); a.className = 'toast-main'; if (link) a.href = link;
     a.innerHTML = '<i class="toast-i"></i><div><b></b><span></span></div>';
     a.querySelector('b').textContent = label || 'New';
     a.querySelector('span').textContent = text;
     if (iconHtml) a.querySelector('.toast-i').innerHTML = iconHtml; else a.querySelector('.toast-i').remove();
-    box.appendChild(a); setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 12000);
+    w.appendChild(a);
+    if (say) { var r = document.createElement('button'); r.type = 'button'; r.className = 'toast-rep'; r.title = 'Repeat the voice message'; r.setAttribute('aria-label', 'Repeat'); r.setAttribute('data-say', say); r.innerHTML = '&#8635;'; w.appendChild(r); }
+    var x = document.createElement('button'); x.type = 'button'; x.className = 'toast-x'; x.setAttribute('aria-label', 'Close'); x.innerHTML = '&times;'; x.addEventListener('click', function () { w.remove(); }); w.appendChild(x);
+    box.appendChild(w); setTimeout(function () { if (w.parentNode) w.parentNode.removeChild(w); }, 20000);
   }
+  // "Repeat" buttons: read a notification again
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-say]');
+    if (b) { ev.preventDefault(); ev.stopPropagation(); unlock(); speak(b.getAttribute('data-say'), true); b.classList.remove('spin'); void b.offsetWidth; b.classList.add('spin'); return; }
+    var t = ev.target.closest('[data-say-input]');
+    if (t) {
+      var inp = document.getElementById(t.getAttribute('data-say-input')); if (!inp) return;
+      var sample = { name: 'Ahmed Khan', position: 'Driver', amount: 'AED 1,500.00', party: 'Ahmed Khan', type: 'enquiry', seq: '1st', response: 'Selected', ref: 'RCT-0001' };
+      speak((inp.value || inp.placeholder).replace(/\{(\w+)\}/g, function (m, k) { return sample[k] || ''; }), true);
+    }
+  }, true);
+  var sayBar = document.querySelector('.say-bar[data-autosay]');
+  if (sayBar) setTimeout(function () { speak(sayBar.getAttribute('data-autosay')); }, 300);
   syncSound();
   document.querySelectorAll('[data-sound-toggle]').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -267,7 +326,7 @@
       if (d.items && d.items.length) {
         var loud = d.items.filter(function (it) { return !it.quiet; });
         if (loud.length) { beep(false, loud[0].sound); if (loud[0].say) setTimeout(function () { speak(loud[0].say); }, 900); }
-        d.items.forEach(function (it) { if (!it.quiet) toast(it.text, it.link, it.label, it.icon); if (it.id > since) since = it.id; });
+        d.items.forEach(function (it) { if (!it.quiet) toast(it.text, it.link, it.label, it.icon, it.say || it.text); if (it.id > since) since = it.id; });
         if (window.rhLiveRefresh) window.rhLiveRefresh();
       }
     }).catch(function () {});
