@@ -30,7 +30,7 @@ if (is_post()) {
     }
     if ($t === 'sounds') {
         $cfg = [];
-        foreach (NOTIF_KINDS as $k => $d) $cfg[$k] = ['on' => !empty($_POST['on'][$k]), 'sound' => isset(NOTIF_SOUNDS[$_POST['sound'][$k] ?? '']) ? $_POST['sound'][$k] : $d[1], 'icon' => preg_replace('/[^a-z-]/', '', (string)($_POST['icon'][$k] ?? $d[2]))];
+        foreach (NOTIF_KINDS as $k => $d) $cfg[$k] = ['on' => !empty($_POST['on'][$k]), 'sound' => isset(NOTIF_SOUNDS[$_POST['sound'][$k] ?? '']) ? $_POST['sound'][$k] : $d[1], 'icon' => preg_replace('/[^a-z-]/', '', (string)($_POST['icon'][$k] ?? $d[2])), 'voice' => !empty($_POST['voice'][$k])];
         set_setting('notif_config', json_encode($cfg));
         audit('notification-settings', 'settings', null, null, $cfg);
         flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
@@ -104,10 +104,10 @@ if ($t === 'archive') {
 if ($t === 'sounds') {
     $cfg = notif_config();
     $icons = ['bell', 'user-plus', 'folder', 'send', 'chat', 'target', 'check-circle', 'dollar', 'alert', 'activity', 'star', 'zap', 'heart', 'plane', 'briefcase', 'mail', 'clipboard', 'award'];
-    echo '<div class="alert info">' . icon('volume', 15) . ' Choose which alerts ring, the sound and the icon for each type. Staff can still mute their own computer with the speaker button in the top bar.</div>';
-    echo '<form method="post" action="?t=sounds" class="card flush">' . csrf_field() . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Alert type</th><th>On</th><th>Sound</th><th></th><th>Icon</th></tr></thead><tbody>';
+    echo '<div class="alert info">' . icon('volume', 15) . ' Choose which alerts ring, which are read aloud by a voice, the sound and the icon for each type. Staff can still mute their own computer with the speaker button in the top bar.</div>';
+    echo '<form method="post" action="?t=sounds" class="card flush">' . csrf_field() . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Alert type</th><th>On</th><th>Voice</th><th>Sound</th><th></th><th>Icon</th></tr></thead><tbody>';
     foreach ($cfg as $k => $c) {
-        echo '<tr><td><span class="notif-ico">' . icon($c['icon'], 18) . '</span> <b>' . e($c['label']) . '</b></td><td><label class="switch"><input type="checkbox" name="on[' . $k . ']" value="1"' . ($c['on'] ? ' checked' : '') . '><i></i></label></td><td><select id="snd_' . $k . '" name="sound[' . $k . ']">';
+        echo '<tr><td><span class="notif-ico">' . icon($c['icon'], 18) . '</span> <b>' . e($c['label']) . '</b></td><td><label class="switch"><input type="checkbox" name="on[' . $k . ']" value="1"' . ($c['on'] ? ' checked' : '') . '><i></i></label></td><td><label class="switch" title="Read the alert aloud"><input type="checkbox" name="voice[' . $k . ']" value="1"' . ($c['voice'] ? ' checked' : '') . '><i></i></label></td><td><select id="snd_' . $k . '" name="sound[' . $k . ']">';
         foreach (NOTIF_SOUNDS as $sv => $sl) echo '<option value="' . $sv . '"' . ($c['sound'] === $sv ? ' selected' : '') . '>' . e($sl) . '</option>';
         echo '</select></td><td><button type="button" class="btn ghost sm" data-test-sound="snd_' . $k . '">' . icon('volume', 14) . ' Test</button></td><td><select name="icon[' . $k . ']">';
         foreach ($icons as $ic) echo '<option value="' . $ic . '"' . ($c['icon'] === $ic ? ' selected' : '') . '>' . e(ucwords(str_replace('-', ' ', $ic))) . '</option>';

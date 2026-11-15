@@ -31,7 +31,7 @@ $convs = rows("SELECT c.id, c.full_name, c.ref_no, c.stage,
     FROM candidates c WHERE c.archived=0 AND $w AND (c.deploy_officer IS NOT NULL OR c.team_id IS NOT NULL OR EXISTS (SELECT 1 FROM chat_messages m2 WHERE m2.candidate_id=c.id))
     ORDER BY last_id IS NULL, last_id DESC LIMIT 200", $p);
 
-echo '<div class="card chat"><div class="chat-list">';
+echo '<div class="card chat' . ($cid && can('candidates') ? ' work' : '') . '"><div class="chat-list">';
 if (!$convs) echo '<p class="muted pad">No conversations yet. A chat appears here when a candidate is assigned to you or your team.</p>';
 foreach ($convs as $c) {
     $last = $c['last_id'] ? (string)val('SELECT body FROM chat_messages WHERE id=?', [$c['last_id']]) : '';
@@ -53,5 +53,7 @@ else {
         . '<form method="post" enctype="multipart/form-data" class="chat-form" action="chat.php?c=' . $cid . '">' . csrf_field() . '<div style="flex:1"><textarea name="body" rows="2" placeholder="Type a message to the candidate…" maxlength="4000"></textarea><input type="file" name="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" style="margin-top:6px;font-size:12px"></div><button class="btn">' . icon('send', 15) . ' Send</button></form>'
         . '<script nonce="' . csp_nonce() . '">(function(){var m=document.getElementById("msgs"),last=m.innerHTML;m.scrollTop=m.scrollHeight;setInterval(function(){if(document.hidden)return;fetch("chat.php?c=' . $cid . '&frag=1",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.text():null}).then(function(h){if(h!==null&&h!==last){var atEnd=m.scrollHeight-m.scrollTop-m.clientHeight<80;m.innerHTML=h;last=h;if(atEnd)m.scrollTop=m.scrollHeight}}).catch(function(){})},8000)})();</script>';
 }
-echo '</div></div>';
+echo '</div>';
+if ($cid && can('candidates') && function_exists('deployment_panel')) echo deployment_panel(row('SELECT * FROM candidates WHERE id=?', [$cid]));
+echo '</div>';
 page_end();

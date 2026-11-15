@@ -209,7 +209,8 @@ function notif_config()
     if ($c !== null) return $c;
     $saved = json_decode((string)setting('notif_config', ''), true) ?: [];
     $c = [];
-    foreach (NOTIF_KINDS as $k => $d) $c[$k] = ['on' => (bool)($saved[$k]['on'] ?? true), 'sound' => $saved[$k]['sound'] ?? $d[1], 'icon' => $saved[$k]['icon'] ?? $d[2], 'label' => $d[0]];
+    foreach (NOTIF_KINDS as $k => $d) $c[$k] = ['on' => (bool)($saved[$k]['on'] ?? true), 'sound' => $saved[$k]['sound'] ?? $d[1], 'icon' => $saved[$k]['icon'] ?? $d[2], 'label' => $d[0],
+        'voice' => (bool)($saved[$k]['voice'] ?? in_array($k, ['assigned', 'file', 'deploy', 'chat'], true))];
     return $c;
 }
 /** System task (Tasks & Alerts). $key avoids duplicates for the same auto task. */

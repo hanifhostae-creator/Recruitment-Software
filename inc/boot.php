@@ -2,7 +2,7 @@
 // Bootstrap — every page starts with: require __DIR__ . '/inc/boot.php';
 if (!defined('ROOT')) define('ROOT', dirname(__DIR__));
 define('APP_NAME', 'RH Management');
-define('APP_VERSION', '1.3.0');
+define('APP_VERSION', '1.4.0');
 
 // Site configuration (database, demo mode, secret key). inc/config.php is never committed — copy inc/config.sample.php.
 if (is_file(__DIR__ . '/config.php')) require __DIR__ . '/config.php';
@@ -56,9 +56,9 @@ if (!headers_sent()) {
     header('X-Content-Type-Options: nosniff');
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
-    header('Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()');
+    header('Permissions-Policy: camera=(self), microphone=(), geolocation=(), payment=()');
     header('X-Robots-Tag: noindex, nofollow');
-    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-" . csp_nonce() . "'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'");
+    header("Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-" . csp_nonce() . "'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'self'; form-action 'self'; base-uri 'self'; object-src 'none'");
     if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') header('Strict-Transport-Security: max-age=31536000');
 }
 

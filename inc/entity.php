@@ -48,6 +48,15 @@ function field_norm($s)
     if ($f['type'] === 'opt') $f['other'] = true;
     return $f;
 }
+/** Some fields are hidden from some roles (e.g. HR and Deployment do not see who referred a candidate). */
+function field_allowed($f)
+{
+    if (empty($f['hide_roles'])) return true;
+    $role = (string)(me()['role_name'] ?? '');
+    if (is_super()) return true;
+    foreach ($f['hide_roles'] as $p) if (stripos($role, $p) === 0) return false;
+    return true;
+}
 function entdef($key) { return $GLOBALS['ENT'][$key] ?? null; }
 function ent_home($key) { return $GLOBALS['ENT_HOME'][$key] ?? null; }
 function ent_url($key, $id) { $h = ent_home($key); return $h ? u($h['url'], ['a' => 'view', 'id' => $id]) : null; }
@@ -157,7 +166,15 @@ function field_input($k, $f, $v, $name = null)
         case 'url': $in = '<input id="' . $id . '" type="url" name="' . $name . '" value="' . e($v) . '" placeholder="https://"' . $req . '>'; break;
         case 'password': $in = '<input id="' . $id . '" type="password" name="' . $name . '" autocomplete="new-password" placeholder="' . ($v ? 'Leave blank to keep the current password' : 'At least 10 characters') . '">'; break;
         case 'bool': return '<label class="check"><input type="hidden" name="' . $name . '" value="0"><input type="checkbox" name="' . $name . '" value="1"' . ($v ? ' checked' : '') . '> ' . e($f['label']) . '</label>';
-        case 'file': $in = '<input id="' . $id . '" type="file" name="' . $name . '"' . (!empty($f['accept']) ? ' accept="' . e($f['accept']) . '"' : ' accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"') . ((!empty($f['req']) || !empty($f['req_new'])) && !$v ? ' required' : '') . '>' . ($v ? '<small class="muted">Current: ' . file_link($v, basename($v)) . '</small>' : '<small class="muted">PDF, DOC, DOCX, JPG or PNG · max 10 MB</small>'); break;
+        case 'file':
+            if (!empty($f['camera'])) {
+                $in = '<div class="cam-field" data-cam="' . $id . '"><input id="' . $id . '" type="file" name="' . $name . '" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/*">'
+                    . '<div class="cam-btns"><button type="button" class="btn ghost sm" data-cam-open>' . icon('image', 15) . ' Take photo of paper CV</button><span class="muted small" data-cam-info>' . ($v ? 'Current: ' . file_link($v, basename($v)) : 'PDF, DOC, DOCX, JPG or PNG · max 10 MB') . '</span></div>'
+                    . '<div class="cam-box" hidden><video playsinline muted></video><div class="cam-pages"></div><div class="cam-ctl"><button type="button" class="btn sm" data-cam-shot>' . icon('zap', 15) . ' Capture page</button><button type="button" class="btn ok sm" data-cam-done>' . icon('check', 15) . ' Use photos</button><button type="button" class="btn ghost sm" data-cam-cancel>Cancel</button></div></div>'
+                    . '<input type="file" accept="image/*" capture="environment" data-cam-native hidden></div>';
+                break;
+            }
+            $in = '<input id="' . $id . '" type="file" name="' . $name . '"' . (!empty($f['accept']) ? ' accept="' . e($f['accept']) . '"' : ' accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"') . ((!empty($f['req']) || !empty($f['req_new'])) && !$v ? ' required' : '') . '>' . ($v ? '<small class="muted">Current: ' . file_link($v, basename($v)) . '</small>' : '<small class="muted">PDF, DOC, DOCX, JPG or PNG · max 10 MB</small>'); break;
         case 'user':
             $ulist = staff_list($f['role'] ?? null);
             if ($v && !in_array((string)$v, array_map('strval', array_column($ulist, 'id')), true)) $ulist[] = ['id' => $v, 'name' => user_name($v)];
@@ -348,7 +365,7 @@ function crud_list($d, $base, $mod, array $opt)
     $per = 25;
     $page = max(1, (int)g('page', 1));
     $data = rows('SELECT * FROM ' . $d['table'] . ' WHERE ' . $w . ' ORDER BY ' . $order . ' LIMIT ' . $per . ' OFFSET ' . (($page - 1) * $per), $p);
-    $cols = $opt['list'] ?? $d['list'];
+    $cols = array_values(array_filter($opt['list'] ?? $d['list'], function ($c) use ($d) { return !isset($d['fields'][$c]) || field_allowed($d['fields'][$c]); }));
     $keep = array_filter(['t' => g('t'), 'q' => g('q'), 'archived' => g('archived')] + array_combine(array_map(function ($k) { return 'f_' . $k; }, $d['filters']), array_map(function ($k) { return g('f_' . $k); }, $d['filters'])));
 
     if (!empty($opt['intro'])) echo $opt['intro'];
@@ -420,14 +437,17 @@ function crud_form($d, $base, $mod, $r, array $opt)
     echo '<div class="card form-card"><div class="card-h"><h3>' . ($isNew ? 'New ' . e(strtolower($d['one'])) : 'Edit ' . e(ent_row_title($d, $r))) . '</h3>'
         . '<a class="btn ghost sm" href="' . e($isNew ? $base : u($base, ['a' => 'view', 'id' => $r['id']])) . '">Cancel</a></div>';
     echo '<form method="post" enctype="multipart/form-data" action="' . e(u($base, ['a' => 'save', 'id' => $r['id'] ?? null])) . '">' . csrf_field() . '<div class="grid-form">';
+    $more = '';
     foreach ($d['fields'] as $k => $f) {
-        if (!empty($f['hide'])) continue;
+        if (!empty($f['hide']) || !field_allowed($f)) continue;
         $v = array_key_exists($k, $vals) ? $vals[$k] : ($isNew ? (g($k) !== '' ? g($k) : ($f['default'] ?? null)) : null);
         if ($f['type'] === 'password') $v = $r ? 'x' : '';
         if (!$isNew && !empty($f['new_only'])) { echo '<div class="fld"><label>' . e($f['label']) . '</label><div class="ro">' . (field_show($k, $f, $r) ?: '—') . '</div></div>'; continue; }
-        $wide = in_array($f['type'], ['textarea', 'users'], true) || !empty($f['full']);
-        echo '<div class="fld' . ($wide ? ' wide' : '') . ($f['type'] === 'bool' ? ' fld-check' : '') . '">' . field_input($k, $f, $v) . '</div>';
+        $wide = in_array($f['type'], ['textarea', 'users'], true) || !empty($f['full']) || !empty($f['camera']);
+        $html = '<div class="fld' . ($wide ? ' wide' : '') . ($f['type'] === 'bool' ? ' fld-check' : '') . '">' . field_input($k, $f, $v) . '</div>';
+        if (!empty($f['more'])) $more .= $html; else echo $html;
     }
+    if ($more !== '') echo '<details class="more-fields fld wide"><summary>' . icon('plus', 14) . ' More details (optional)</summary><div class="grid-form">' . $more . '</div></details>';
     if (isset($d['form_extra'])) ($d['form_extra'])($r);
     if ($isNew && !empty($_SESSION['dupe_warn'])) {
         echo '<div class="fld wide"><div class="alert warn">' . $_SESSION['dupe_warn'] . '<label class="check"><input type="checkbox" name="_dupe_ok" value="1"> I have checked — this is a different person / record. Create it anyway.</label></div></div>';
@@ -447,7 +467,7 @@ function crud_save($d, $base, $mod, array $opt)
     $data = [];
     $errors = [];
     foreach ($d['fields'] as $k => $f) {
-        if (!empty($f['hide']) || (!$isNew && !empty($f['new_only']))) continue;
+        if (!empty($f['hide']) || !field_allowed($f) || (!$isNew && !empty($f['new_only']))) continue;
         field_from_post($k, $f, $old, $data, $errors, $isNew);
     }
     if ($isNew && !$errors && $d['dupe'] && empty($_POST['_dupe_ok'])) {
@@ -527,7 +547,7 @@ function crud_view($d, $base, $mod, $id, array $opt)
     if (isset($d['view'])) $d['view']($r, $mod, $base);
     echo '<div class="card"><div class="card-h"><h3>Details</h3></div><dl class="details">';
     foreach ($d['fields'] as $k => $f) {
-        if ($f['type'] === 'password') continue;
+        if ($f['type'] === 'password' || !field_allowed($f)) continue;
         $v = field_show($k, $f, $r);
         echo '<div class="' . (in_array($f['type'], ['textarea'], true) ? 'wide' : '') . '"><dt>' . e($f['label']) . '</dt><dd>' . ($v === '' ? '<span class="muted">—</span>' : $v) . '</dd></div>';
     }
@@ -571,6 +591,7 @@ function crud_related($d, $r)
             $h = ent_home($o['key']);
             if (!$h || !can($h['mod'])) continue;
             $cnt = (int)val('SELECT COUNT(*) FROM ' . $o['table'] . " WHERE $k=? AND archived=0", [$r['id']]);
+            if (!$cnt) continue;
             $list = rows('SELECT * FROM ' . $o['table'] . " WHERE $k=? AND archived=0 ORDER BY id DESC LIMIT 10", [$r['id']]);
             $cols = array_values(array_filter($o['list'], function ($c) use ($k) { return $c !== $k; }));
             $cols = array_slice($cols, 0, 5);

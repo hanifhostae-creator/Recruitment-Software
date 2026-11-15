@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.3.0 (15 Nov 2026)
+## Current version: 1.4.0 (15 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -30,6 +30,9 @@ Read this first in every new session. Update it at the end of every piece of wor
 - The Super Admin (owner) does **not** check in/out; attendance is for staff only.
 - Dashboard heading for the Super Admin is simply "Welcome to Super Admin Panel".
 - Very professional, animated, attractive UI (elevated shadows, hover/click effects, smooth sidebar).
+- Keep the daily flow SIMPLE: reception enters basics (CV optional, camera for paper CVs); HR sees simple data + CV preview;
+  HR file = agreed total + paid now + remaining date (no fee plans); spoken alerts; deployment works from one screen
+  (chat + details + CV + actions); locations also go into the chat; chat links clickable.
 
 Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 10.11)**.
 
@@ -67,12 +70,27 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - MySQL: create a database + user, then either write `inc/config.php` or start PHP with env vars:
   `RH_DB_DRIVER=mysql RH_DB_HOST=127.0.0.1 RH_DB_NAME=rh_test RH_DB_USER=rh RH_DB_PASS=... RH_DEMO_DATA=1 php -S localhost:8000 router.php`
 - Last results (15 Nov, both DBs): crawl of ~1,565 pages with 0 errors; acceptance suite 36/36; reset + workflow + chat
-  privacy 47/48 (the 1 is a test-script quirk, behaviour verified by hand); live-mode + security checks all pass.
+  privacy + v1.4 checks 54/55 (the 1 is a test-script quirk, behaviour verified by hand); live-mode + security checks all pass.
 
 - **v1.3** (15 Nov): Super Admin hero "Welcome to Super Admin Panel"; no check-in/out for the Super Admin (excluded from
   attendance counts, manual box and staff tables); elevated tiles with coloured shadows, 3D tilt + light glare, click
   ripple, money counters animate, cards slide in when scrolled into view (charts start then), sidebar sliding highlight,
   glowing active item and staggered entry; section tabs no longer clip.
+
+- **v1.4** (15 Nov, simplified daily flow):
+  - Reception form: main fields first, the rest under "More details (optional)"; **CV optional**; **"Take photo of paper CV"**
+    (phone/tablet/webcam camera, several pages joined into one image; needs HTTPS on the live site).
+  - HR gets a **spoken announcement** ("New candidate entered: …") plus the pop-up; voice per alert type can be switched
+    in Admin → Notification sounds (Voice column). Reception hears "Candidate selected: … Please assign the deployment
+    team." (no money mentioned); the deployment team hears "New file ready for deployment: …".
+  - HR and Deployment do **not** see "through whom" / source fields (`hide_roles` field option in the engine).
+  - **CV preview** on the candidate page (PDF / photo shown inline; Word files download).
+  - **File done** form without fee plans: agreed total payment, paid now (today's date saved automatically), remaining
+    amount shown live, remaining payment date. Fee plans are no longer required anywhere.
+  - **Deployment workspace** = Candidate Chat with a side panel: basic details, CV, interview locations and the actions
+    (send location, final outcome, payment received, full record, close file). "My Candidates" and alerts open it.
+  - A sent interview location is also **posted in the chat** with a clickable map link; **links in chat are clickable**.
+  - Empty related lists are hidden on detail pages (simpler screens).
 
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
@@ -83,6 +101,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-15 · v1.4.0 · Simplified reception/HR/deployment flow: CV optional + camera, voice alerts, CV preview, plan-free file form, deployment workspace, locations in chat.
 - 2026-11-15 · v1.3.0 · Welcome banner, no owner check-in, premium dashboard / sidebar animations.
 - 2026-11-12 · v1.2.0 · MySQL support, live mode + setup, security hardening, sectioned dashboard, section accounts,
   staff teams, HR restrictions, candidate source report, notification sounds.

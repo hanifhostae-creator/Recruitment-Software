@@ -113,6 +113,49 @@
     });
   }
 
+  // remaining amount on the "File done" form
+  document.querySelectorAll('[data-pay-total]').forEach(function (t) {
+    var f = t.form, p = f.querySelector('[data-pay-paid]'), out = f.querySelector('[data-pay-left]');
+    function calc() { var a = parseFloat(t.value) || 0, b = parseFloat(p.value) || 0; out.textContent = a ? (a - b).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'; out.style.color = a - b < 0 ? 'var(--bad)' : ''; }
+    t.addEventListener('input', calc); if (p) p.addEventListener('input', calc);
+  });
+
+  // CV camera: photograph a paper CV (several pages are joined into one image)
+  document.querySelectorAll('[data-cam]').forEach(function (box) {
+    var input = document.getElementById(box.getAttribute('data-cam')), cam = box.querySelector('.cam-box'), video = cam.querySelector('video'),
+      strip = cam.querySelector('.cam-pages'), info = box.querySelector('[data-cam-info]'), nativeIn = box.querySelector('[data-cam-native]'), stream = null, pages = [];
+    function stop() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } cam.hidden = true; }
+    function attach(blob, n) {
+      try {
+        var dt = new DataTransfer(); dt.items.add(new File([blob], 'cv-photo-' + Date.now() + '.jpg', { type: 'image/jpeg' })); input.files = dt.files;
+        info.innerHTML = ''; var img = document.createElement('img'); img.className = 'cam-thumb'; img.src = URL.createObjectURL(blob); info.appendChild(img);
+        info.appendChild(document.createTextNode(' Photo attached' + (n > 1 ? ' (' + n + ' pages)' : '') + ' · ' + Math.round(blob.size / 1024) + ' KB'));
+      } catch (e) { info.textContent = 'This browser cannot attach a photo here. Please use the file button.'; }
+    }
+    function shot() {
+      if (!video.videoWidth) return;
+      var c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight; c.getContext('2d').drawImage(video, 0, 0);
+      pages.push(c); var t = document.createElement('canvas'); t.width = 90; t.height = Math.round(90 * c.height / c.width); t.getContext('2d').drawImage(c, 0, 0, t.width, t.height); strip.appendChild(t);
+    }
+    function join() {
+      var W = 1240, H = 0, hs = pages.map(function (c) { var h = Math.round(c.height * W / c.width); H += h; return h; });
+      var out = document.createElement('canvas'), g = out.getContext('2d'), y = 0; out.width = W; out.height = H; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+      pages.forEach(function (c, i) { g.drawImage(c, 0, y, W, hs[i]); y += hs[i]; }); return out;
+    }
+    box.querySelector('[data-cam-open]').addEventListener('click', function () {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false }).then(function (s) {
+          stream = s; video.srcObject = s; video.play(); pages = []; strip.innerHTML = ''; cam.hidden = false;
+        }).catch(function () { nativeIn.click(); });
+      } else nativeIn.click();
+    });
+    box.querySelector('[data-cam-shot]').addEventListener('click', function () { if (pages.length < 6) shot(); });
+    box.querySelector('[data-cam-done]').addEventListener('click', function () { if (!pages.length) shot(); if (!pages.length) return; var n = pages.length; join().toBlob(function (b) { attach(b, n); }, 'image/jpeg', 0.82); stop(); });
+    box.querySelector('[data-cam-cancel]').addEventListener('click', stop);
+    nativeIn.addEventListener('change', function () { if (nativeIn.files[0]) attach(nativeIn.files[0], 1); });
+    input.addEventListener('change', function () { if (input.files[0]) info.textContent = input.files[0].name; });
+  });
+
   // print buttons (no inline handlers, allowed by the security policy)
   document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
 
@@ -184,6 +227,18 @@
   document.querySelectorAll('[data-test-sound]').forEach(function (b) {
     b.addEventListener('click', function () { var sel = document.getElementById(b.getAttribute('data-test-sound')); unlock(); beep(true, sel ? sel.value : 'chime'); });
   });
+  // spoken announcement (browser voice, English)
+  function speak(text) {
+    if (!text || !soundOn() || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+    try {
+      var u = new SpeechSynthesisUtterance(text), vs = window.speechSynthesis.getVoices(), v = null, i;
+      for (i = 0; i < vs.length && !v; i++) if (/^en-GB/i.test(vs[i].lang) && /female|serena|kate|libby|sonia/i.test(vs[i].name)) v = vs[i];
+      for (i = 0; i < vs.length && !v; i++) if (/^en/i.test(vs[i].lang)) v = vs[i];
+      if (v) u.voice = v; u.lang = v ? v.lang : 'en-GB'; u.rate = 0.95; u.pitch = 1;
+      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+    } catch (e) {}
+  }
+  if (window.speechSynthesis) window.speechSynthesis.getVoices();
   function toast(text, link, label, iconHtml) {
     var box = document.getElementById('toasts'); if (!box) return;
     var a = document.createElement(link ? 'a' : 'div'); a.className = 'toast'; if (link) a.href = link;
@@ -211,7 +266,7 @@
       document.title = (d.count + (d.chat || 0) > 0 ? '(' + (d.count + (d.chat || 0)) + ') ' : '') + baseTitle;
       if (d.items && d.items.length) {
         var loud = d.items.filter(function (it) { return !it.quiet; });
-        if (loud.length) beep(false, loud[0].sound);
+        if (loud.length) { beep(false, loud[0].sound); if (loud[0].say) setTimeout(function () { speak(loud[0].say); }, 900); }
         d.items.forEach(function (it) { if (!it.quiet) toast(it.text, it.link, it.label, it.icon); if (it.id > since) since = it.id; });
         if (window.rhLiveRefresh) window.rhLiveRefresh();
       }

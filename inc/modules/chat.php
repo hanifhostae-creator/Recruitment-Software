@@ -71,6 +71,11 @@ function chat_add($cid, $type, $senderId, $body, $file = null)
 }
 function chat_mark_read_staff($cid) { if (chat_is_participant($cid)) q("UPDATE chat_messages SET read_at=? WHERE candidate_id=? AND sender_type='Candidate' AND read_at IS NULL", [now(), $cid]); }
 
+/** Escape a chat message and make web links clickable. */
+function chat_linkify($text)
+{
+    return preg_replace('~(https?://[^\s<]+[^\s<.,;:!?)\]])~i', '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>', nl2br(e((string)$text)));
+}
 /** HTML of the conversation. $viewer: 'staff' or 'candidate'. */
 function chat_messages_html($cid, $viewer)
 {
@@ -83,7 +88,7 @@ function chat_messages_html($cid, $viewer)
         if ($m['sender_type'] === 'Candidate') $name = $viewer === 'candidate' ? 'You' : ent_title('candidates', $cid);
         else $name = ($viewer === 'staff' && $mine ? 'You' : user_name($m['sender_id'])) . ' · Deployment team';
         $seen = $mine ? ($m['read_at'] ? ' · Seen' : ' · Sent') : '';
-        $h .= '<div class="msg' . ($mine ? ' me' : '') . '"><small class="who">' . e($name) . '</small>' . nl2br(e($m['body'])) . ($m['file'] ? '<div>' . file_link($m['file'], 'Attachment') . '</div>' : '') . '<small>' . e(dtfmt($m['created_at'])) . $seen . '</small></div>';
+        $h .= '<div class="msg' . ($mine ? ' me' : '') . '"><small class="who">' . e($name) . '</small>' . chat_linkify($m['body']) . ($m['file'] ? '<div>' . file_link($m['file'], 'Attachment') . '</div>' : '') . '<small>' . e(dtfmt($m['created_at'])) . $seen . '</small></div>';
     }
     return $h;
 }
