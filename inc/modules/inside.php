@@ -687,7 +687,7 @@ mod('reception', ['label' => 'Reception', 'icon' => 'home', 'area' => 'Inside Hi
         attendance_box();
         card_open(icon('users', 17) . ' Manual attendance box · ' . date('l d M Y'), '<span class="muted small">Mark staff who did not check in themselves</span>');
         $data = [];
-        foreach (staff_list() as $s) {
+        foreach (attendance_users() as $s) {
             $a = attendance_today($s['id']);
             $btn = '';
             if (can('reception', 'edit')) {

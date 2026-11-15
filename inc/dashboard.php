@@ -115,7 +115,7 @@ function staff_table(array $teams)
 {
     if (!$teams) return '';
     $from = date('Y-m-01');
-    $us = rows('SELECT u.*, r.name AS role FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND u.team IN (' . implode(',', array_fill(0, count($teams), '?')) . ') ORDER BY u.team, u.name', $teams);
+    $us = rows('SELECT u.*, r.name AS role FROM users u LEFT JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1) AND u.team IN (' . implode(',', array_fill(0, count($teams), '?')) . ') ORDER BY u.team, u.name', $teams);
     $data = [];
     foreach ($us as $u) {
         $a = attendance_today($u['id']);
@@ -166,7 +166,7 @@ function dash_tiles($sec)
                 'income' => ['Income this month', $in, 'money', 'dollar', 'green', 'finance.php?t=sections'],
                 'expense' => ['Expenses this month', $out, 'money', 'card', 'red', 'finance.php?t=sections'],
                 'profit' => ['Profit this month', $in - $out, 'money', 'bar-chart', $in - $out < 0 ? 'red' : 'gold', 'finance.php?t=sections'],
-                'present' => ['Staff present today', (int)$c('SELECT COUNT(*) FROM staff_attendance WHERE day=?', [$t]) . ' / ' . (int)$c('SELECT COUNT(*) FROM users WHERE active=1'), 'text', 'clock', 'green', 'index.php?s=staff'],
+                'present' => ['Staff present today', attendance_present_count($t) . ' / ' . attendance_staff_count(), 'text', 'clock', 'green', 'index.php?s=staff'],
                 'issues' => ['Open issues', $c("SELECT COUNT(*) FROM issues WHERE status IN ('Open','In Progress') AND archived=0"), 'num', 'alert', 'amber', 'tasks.php?t=issues'],
             ];
         case 'inside':
@@ -258,13 +258,13 @@ function dash_tiles($sec)
                 'bank' => ['Bank balance', $bank, 'money', 'card', 'blue', 'accounting.php?t=banks'],
             ];
         case 'staff':
-            $act = (int)$c('SELECT COUNT(*) FROM users WHERE active=1');
-            $pres = (int)$c('SELECT COUNT(*) FROM staff_attendance WHERE day=?', [$t]);
+            $act = attendance_staff_count();
+            $pres = attendance_present_count($t);
             return [
                 'staff' => ['Active staff', $act, 'num', 'users', 'blue', 'staff.php'],
                 'present' => ['Present today', $pres, 'num', 'check-circle', 'green', 'hrm.php?t=register'],
                 'absent' => ['Not checked in', max(0, $act - $pres), 'num', 'alert', 'red', 'reception.php?t=attendance'],
-                'out' => ['Checked out', $c('SELECT COUNT(*) FROM staff_attendance WHERE day=? AND check_out IS NOT NULL', [$t]), 'num', 'logout', 'amber', 'hrm.php?t=register'],
+                'out' => ['Checked out', $c('SELECT COUNT(*) FROM staff_attendance a JOIN users u ON u.id=a.user_id WHERE a.day=? AND a.check_out IS NOT NULL AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1)', [$t]), 'num', 'logout', 'amber', 'hrm.php?t=register'],
                 'leave' => ['Leave requests pending', $c("SELECT COUNT(*) FROM leave_requests WHERE status='Pending' AND archived=0"), 'num', 'calendar', 'violet', 'hrm.php?t=leave'],
             ];
     }
@@ -293,7 +293,7 @@ function dash_render($sec)
     echo '<div class="stats" data-live-src="index.php?s=' . e($sec) . '&live=1">';
     $i = 0;
     foreach (dash_tiles($sec) as $k => $t) {
-        echo '<a class="stat t-' . e($t[4]) . '" data-k="' . e($k) . '" style="--d:' . ($i++ * 45) . 'ms" href="' . e($t[5]) . '"><span class="stat-i">' . icon($t[3], 20) . '</span><span class="stat-v" data-count="' . e(is_numeric($t[1]) && $t[2] === 'num' ? $t[1] : '') . '">' . e(dash_fmt($t[1], $t[2])) . '</span><span class="stat-l">' . e($t[0]) . '</span></a>';
+        echo '<a class="stat t-' . e($t[4]) . '" data-k="' . e($k) . '" style="--d:' . ($i++ * 45) . 'ms" href="' . e($t[5]) . '"><span class="stat-i">' . icon($t[3], 20) . '</span><span class="stat-v" data-count="' . e(is_numeric($t[1]) && in_array($t[2], ['num', 'money'], true) ? $t[1] : '') . '"' . ($t[2] === 'money' ? ' data-prefix="' . e(setting('currency', 'AED')) . ' " data-dec="2"' : '') . '">' . e(dash_fmt($t[1], $t[2])) . '</span><span class="stat-l">' . e($t[0]) . '</span></a>';
     }
     echo '</div>';
     $m = date('Y-m-01');
@@ -307,7 +307,7 @@ function dash_render($sec)
         foreach (CAND_STAGES as $s) $by[$s] = (int)val('SELECT COUNT(*) FROM candidates WHERE stage=? AND archived=0', [$s]);
         echo '<div class="grid g3" style="margin-top:16px"><div class="card"><div class="card-h"><h3>' . icon('users', 17) . ' Inside hiring pipeline</h3></div>' . chart_bars($by) . '</div>';
         $team = [];
-        foreach (rows("SELECT COALESCE(u.team,'Unassigned') AS t, COUNT(u.id) AS n, SUM(CASE WHEN a.id IS NULL THEN 0 ELSE 1 END) AS p FROM users u LEFT JOIN staff_attendance a ON a.user_id=u.id AND a.day=? WHERE u.active=1 GROUP BY COALESCE(u.team,'Unassigned')", [today()]) as $r) $team[$r['t'] . ' (' . (int)$r['p'] . '/' . (int)$r['n'] . ')'] = (int)$r['p'];
+        foreach (rows("SELECT COALESCE(u.team,'Unassigned') AS t, COUNT(u.id) AS n, SUM(CASE WHEN a.id IS NULL THEN 0 ELSE 1 END) AS p FROM users u LEFT JOIN staff_attendance a ON a.user_id=u.id AND a.day=? WHERE u.active=1 AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1) GROUP BY COALESCE(u.team,'Unassigned')", [today()]) as $r) $team[$r['t'] . ' (' . (int)$r['p'] . '/' . (int)$r['n'] . ')'] = (int)$r['p'];
         echo '<div class="card"><div class="card-h"><h3>' . icon('clock', 17) . ' Present today by team</h3><a class="small" href="index.php?s=staff">Staff</a></div>' . chart_bars($team) . '</div>';
         echo '<div class="card"><div class="card-h"><h3>' . icon('zap', 17) . ' Live activity</h3></div>' . activity_feed([]) . '</div></div>';
         return;
@@ -328,13 +328,13 @@ function dash_render($sec)
     }
     if ($sec === 'staff') {
         foreach (options('staff_teams') as $team) {
-            $n = (int)val('SELECT COUNT(*) FROM users WHERE active=1 AND team=?', [$team]);
+            $n = (int)val('SELECT COUNT(*) FROM users u WHERE u.active=1 AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1) AND u.team=?', [$team]);
             if (!$n) continue;
             card_open(icon('users', 17) . ' ' . e($team) . ' <span class="count">' . $n . '</span>');
             echo staff_table([$team]);
             card_close();
         }
-        $none = (int)val("SELECT COUNT(*) FROM users WHERE active=1 AND (team IS NULL OR team='')");
+        $none = (int)val("SELECT COUNT(*) FROM users u WHERE u.active=1 AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1) AND (u.team IS NULL OR u.team='')");
         if ($none) echo '<div class="alert warn">' . $none . ' staff member(s) have no team. Set it in <a href="staff.php">Staff &amp; Roles</a>.</div>';
         return;
     }

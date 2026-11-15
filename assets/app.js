@@ -60,15 +60,58 @@
   if (!reduce) document.querySelectorAll('[data-count]').forEach(function (el) {
     var target = parseFloat(el.getAttribute('data-count'));
     if (isNaN(target) || target <= 0 || target > 1e9) return;
-    var txt = el.textContent, dec = (String(target).split('.')[1] || '').length, start = null;
+    var txt = el.textContent, pre = el.getAttribute('data-prefix') || '', fd = el.hasAttribute('data-dec') ? 2 : 0, start = null;
     function step(ts) {
       if (!start) start = ts;
-      var p = Math.min(1, (ts - start) / 700), v = target * (1 - Math.pow(1 - p, 3));
-      el.textContent = p < 1 ? v.toLocaleString(undefined, { maximumFractionDigits: dec ? 2 : 0 }) : txt;
+      var p = Math.min(1, (ts - start) / 900), v = target * (1 - Math.pow(1 - p, 3));
+      el.textContent = p < 1 ? pre + v.toLocaleString(undefined, { minimumFractionDigits: fd, maximumFractionDigits: fd }) : txt;
       if (p < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   });
+
+  // click ripple on buttons, tiles, menu items and section tabs
+  document.addEventListener('pointerdown', function (ev) {
+    var el = ev.target.closest('.btn, .stat, .nav a, .sec-tabs a, .tabs a, .kcard, .vac');
+    if (!el || reduce) return;
+    var r = el.getBoundingClientRect(), d = Math.max(r.width, r.height), s = document.createElement('span');
+    s.className = 'rip'; s.style.width = s.style.height = d + 'px';
+    s.style.left = (ev.clientX - r.left - d / 2) + 'px'; s.style.top = (ev.clientY - r.top - d / 2) + 'px';
+    el.appendChild(s); setTimeout(function () { if (s.parentNode) s.parentNode.removeChild(s); }, 650);
+  });
+
+  // 3D tilt + light glare on stat tiles (mouse only)
+  var fine = window.matchMedia && window.matchMedia('(pointer: fine)').matches;
+  if (fine && !reduce) document.querySelectorAll('.stat').forEach(function (t) {
+    var g = document.createElement('i'); g.className = 'glare'; t.appendChild(g);
+    t.addEventListener('mousemove', function (ev) {
+      var r = t.getBoundingClientRect(), x = (ev.clientX - r.left) / r.width, y = (ev.clientY - r.top) / r.height;
+      t.style.setProperty('--ry', ((x - .5) * 10).toFixed(2) + 'deg'); t.style.setProperty('--rx', ((.5 - y) * 10).toFixed(2) + 'deg');
+      t.style.setProperty('--mx', (x * 100).toFixed(1) + '%'); t.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+    });
+    t.addEventListener('mouseleave', function () { t.style.removeProperty('--rx'); t.style.removeProperty('--ry'); });
+  });
+
+  // sidebar: sliding highlight that follows the mouse and rests on the open page
+  var nav = document.querySelector('.nav');
+  if (nav) {
+    var glide = document.createElement('span'); glide.className = 'nav-glide'; nav.appendChild(glide); nav.classList.add('has-glide');
+    var on = nav.querySelector('a.on');
+    var moveTo = function (a) { if (!a) { glide.style.opacity = 0; return; } glide.style.opacity = 1; glide.style.top = a.offsetTop + 'px'; glide.style.height = a.offsetHeight + 'px'; };
+    nav.querySelectorAll('a').forEach(function (a, i) { a.style.setProperty('--i', i); a.addEventListener('mouseenter', function () { moveTo(a); }); });
+    nav.addEventListener('mouseleave', function () { moveTo(on); });
+    moveTo(on);
+    if (on && on.scrollIntoView) { var nr = nav.getBoundingClientRect(), orr = on.getBoundingClientRect(); if (orr.bottom > nr.bottom) nav.scrollTop = on.offsetTop - nav.clientHeight / 2; }
+  }
+
+  // cards slide in as they scroll into view (charts start when visible)
+  if ('IntersectionObserver' in window && !reduce) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }); }, { threshold: .08 });
+    document.querySelectorAll('.content .card, .content .grid > .card').forEach(function (c) {
+      var r = c.getBoundingClientRect();
+      if (r.top > window.innerHeight) { c.classList.add('reveal'); io.observe(c); }
+    });
+  }
 
   // print buttons (no inline handlers, allowed by the security policy)
   document.querySelectorAll('[data-print]').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });

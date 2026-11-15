@@ -2,7 +2,34 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.2.0 (12 Nov 2026)
+## Current version: 1.3.0 (15 Nov 2026)
+
+### First message to paste in a new session
+> Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
+
+### Live deployment status (owner, Hostinger)
+- Hostinger hPanel → "Deploy from GitHub" for `crm.rhmanagements.com`, folder `public_html`, branch **`main`** (not the claude/* branch).
+- After deploy the owner must create `public_html/inc/config.php` from `inc/config.sample.php` (MySQL name/user/password,
+  `DB_HOST=localhost`, long random `APP_KEY`, `DEMO_DATA=false`) **before** the first visit; then `setup.php` creates the Super Admin.
+- Not yet confirmed: whether Hostinger's GitHub deploy keeps untracked files (`inc/config.php`, `uploads/`) on each redeploy — check after the first auto-deploy.
+- The owner wants the GitHub repo **private**. Early commits (before 12 Nov) contain tool attribution lines; rewriting history needs the owner's explicit OK (force-push to `main`).
+
+### What the owner asked for in the chat (keep these decisions)
+- Same business & spec, professional redesign; English-only system; mobile-friendly everywhere, especially the portals.
+- Workflow: Reception enters candidate → "Assign to HR" (HR names only) → HR gets beep → HR interview Selected → file
+  confirm (advance now, rest later) → Reception notified ("Ready for deployment" tab) → Reception or HR assigns the
+  Deployment team/officer → candidate gets the portal email at the same moment → private chat candidate ↔ deployment team.
+- Chat is private: only the deployment team (and Super Admin); admin grants others; views are audited.
+- Password reset by email for every login (staff, candidate, client, agent) + admin can send reset links.
+- MySQL on Hostinger; strong security; nothing may reveal the technology or who built it.
+- Super Admin dashboard per section (Inside, Outside, Travel & Tour, Marketing, Marriage Bureau, IT & Business Dev,
+  Accounts, Staff & Attendance); income/expense/profit per section; accountant enters income/expense per section.
+- Staff teams per section; per-staff performance & attendance for the admin. HR must NOT see staff attendance.
+- Marketing report: candidates by "through whom" and by source, per day.
+- Configurable notification sounds and icons; beeps on new entries.
+- The Super Admin (owner) does **not** check in/out; attendance is for staff only.
+- Dashboard heading for the Super Admin is simply "Welcome to Super Admin Panel".
+- Very professional, animated, attractive UI (elevated shadows, hover/click effects, smooth sidebar).
 
 Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 10.11)**.
 
@@ -39,8 +66,13 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - SQLite: `php -S localhost:8000 router.php` (no config file → demo data). Logins in README.
 - MySQL: create a database + user, then either write `inc/config.php` or start PHP with env vars:
   `RH_DB_DRIVER=mysql RH_DB_HOST=127.0.0.1 RH_DB_NAME=rh_test RH_DB_USER=rh RH_DB_PASS=... RH_DEMO_DATA=1 php -S localhost:8000 router.php`
-- Last results (both DBs): crawl of ~1,565 pages with 0 errors; acceptance suite 36/36; reset + workflow + chat
+- Last results (15 Nov, both DBs): crawl of ~1,565 pages with 0 errors; acceptance suite 36/36; reset + workflow + chat
   privacy 47/48 (the 1 is a test-script quirk, behaviour verified by hand); live-mode + security checks all pass.
+
+- **v1.3** (15 Nov): Super Admin hero "Welcome to Super Admin Panel"; no check-in/out for the Super Admin (excluded from
+  attendance counts, manual box and staff tables); elevated tiles with coloured shadows, 3D tilt + light glare, click
+  ripple, money counters animate, cards slide in when scrolled into view (charts start then), sidebar sliding highlight,
+  glowing active item and staggered entry; section tabs no longer clip.
 
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
@@ -51,6 +83,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-15 · v1.3.0 · Welcome banner, no owner check-in, premium dashboard / sidebar animations.
 - 2026-11-12 · v1.2.0 · MySQL support, live mode + setup, security hardening, sectioned dashboard, section accounts,
   staff teams, HR restrictions, candidate source report, notification sounds.
 - 2026-11-11 · v1.1.0 · Password reset & SMTP, live alerts, workflow changes, private chat.

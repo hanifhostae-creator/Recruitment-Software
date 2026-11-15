@@ -321,7 +321,7 @@ mod('paybook', ['label' => 'Marriage Bureau', 'icon' => 'heart', 'area' => 'Trav
 // ---------------------------------------------------------------- widgets & search
 widget('hrm', 'Active employees', function () { return (int)val("SELECT COUNT(*) FROM employees WHERE status='Active' AND archived=0"); }, 'hrm.php?t=employees', 'id', 'blue');
 widget('hrm', 'Leave pending', function () { return (int)val("SELECT COUNT(*) FROM leave_requests WHERE status='Pending' AND archived=0"); }, 'hrm.php?t=leave', 'calendar', 'amber');
-widget('hrm', 'Checked in today', function () { return (int)val('SELECT COUNT(*) FROM staff_attendance WHERE day=?', [today()]) . ' / ' . (int)val('SELECT COUNT(*) FROM users WHERE active=1'); }, 'hrm.php?t=register', 'clock', 'green');
+widget('hrm', 'Checked in today', function () { return attendance_present_count(today()) . ' / ' . attendance_staff_count(); }, 'hrm.php?t=register', 'clock', 'green');
 widget('crm', 'Open deals value', function () { return money(val("SELECT COALESCE(SUM(value),0) FROM crm_deals WHERE stage NOT IN ('Won','Lost') AND archived=0")); }, 'crm.php', 'briefcase', 'gold');
 widget('crm', 'Overdue follow-ups', function () { return (int)val("SELECT COUNT(*) FROM followups WHERE status='Open' AND due_date<? AND archived=0", [today()]); }, 'crm.php?t=followups', 'clock', 'red');
 widget('erp', 'Purchase requests pending', function () { return (int)val("SELECT COUNT(*) FROM purchase_requests WHERE status='Pending' AND archived=0"); }, 'erp.php?t=prs', 'clipboard', 'amber');

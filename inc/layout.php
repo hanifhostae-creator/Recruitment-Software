@@ -120,11 +120,13 @@ function page_start($title, $active = null, $showFlash = true)
     echo '<div class="main-col"><header class="top"><button class="icon-btn only-m" data-open-side aria-label="Open menu">' . icon('menu', 20) . '</button>'
         . '<form class="top-search" action="search.php" method="get" role="search">' . icon('search', 17) . '<input name="q" value="' . e($active === 'search' ? g('q') : '') . '" placeholder="Search candidates, files, demands, receipts…" aria-label="Global search"></form><div class="top-r">';
     if ($u) {
+        if (!is_super()) {
         echo '<form method="post" class="att-mini">' . csrf_field();
         if (!$att) echo '<button class="btn sm" name="_att" value="in">' . icon('login', 15) . '<span> Check in</span></button>';
         elseif (!$att['check_out']) echo '<span class="att-on" title="Checked in at ' . e(substr($att['check_in'], 11, 5)) . '"><i></i>' . e(substr($att['check_in'], 11, 5)) . '</span><button class="btn ghost sm" name="_att" value="out">' . icon('logout', 15) . '<span> Check out</span></button>';
         else echo '<span class="att-done">' . icon('check-circle', 15) . ' ' . e(substr($att['check_in'], 11, 5)) . '–' . e(substr($att['check_out'], 11, 5)) . '</span>';
         echo '</form>';
+        }
         echo sound_button() . '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 19) . '</button>'
             . '<a class="icon-btn" href="notifications.php" aria-label="Notifications">' . icon('bell', 19) . '<span class="dot" data-bell-dot' . ($unread ? '' : ' hidden') . '>' . ($unread > 99 ? '99+' : $unread) . '</span></a>'
             . '<details class="user-menu"><summary><span class="avatar">' . e(strtoupper(substr($u['name'], 0, 1))) . '</span><span class="um-n"><b>' . e($u['name']) . '</b><small>' . e($u['role_name']) . '</small></span>' . icon('chevron-down', 14) . '</summary>'
@@ -191,6 +193,7 @@ function simple_table(array $head, array $data, $empty = 'Nothing to show yet.',
 }
 function attendance_box()
 {
+    if (is_super()) return; // the owner does not check in
     $u = me();
     $a = attendance_today($u['id']);
     echo '<div class="card att-box"><div class="card-h"><h3>' . icon('clock', 17) . ' My attendance · ' . date('D d M') . '</h3></div><form method="post" class="att-row">' . csrf_field();

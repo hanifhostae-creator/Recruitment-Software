@@ -368,6 +368,11 @@ function csv_out($filename, array $headers, array $data, $tbl = null)
 
 // ---------------------------------------------------------------- staff attendance (check-in / check-out)
 
+/** Staff who check in and out (the Super Admin / owner does not). */
+const ATT_STAFF = "SELECT u.id, u.name, u.username FROM users u WHERE u.active=1 AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1) ORDER BY u.name";
+function attendance_users() { return rows(ATT_STAFF); }
+function attendance_staff_count() { return (int)val("SELECT COUNT(*) FROM users u WHERE u.active=1 AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1)"); }
+function attendance_present_count($day) { return (int)val("SELECT COUNT(*) FROM staff_attendance a JOIN users u ON u.id=a.user_id WHERE a.day=? AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1)", [$day]); }
 function attendance_today($uid) { return row('SELECT * FROM staff_attendance WHERE user_id=? AND day=?', [$uid, today()]); }
 /** Handles the check-in box and the Reception manual box (posted with _att). */
 function attendance_handle()
@@ -375,6 +380,7 @@ function attendance_handle()
     $u = me();
     if (!$u) return;
     $target = (int)p('att_user', $u['id']);
+    if ((int)val('SELECT r.is_super FROM users x JOIN roles r ON r.id=x.role_id WHERE x.id=?', [$target]) === 1) { flash('The Super Admin does not check in or out.', 'warn'); back(); }
     if ($target !== (int)$u['id'] && !can('reception', 'edit') && !can('hrm', 'edit')) { flash('You cannot mark attendance for other staff.', 'bad'); back(); }
     $a = p('_att');
     $rec = attendance_today($target);
