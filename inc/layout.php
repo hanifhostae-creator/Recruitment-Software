@@ -141,7 +141,7 @@ function page_start($title, $active = null, $showFlash = true)
         $sn = $_SESSION['say_note'];
         unset($_SESSION['say_note']);
         $nc = notif_config()[$sn['kind']] ?? notif_config()['system'];
-        echo '<div class="say-bar" role="status"><span class="say-ico">' . icon($nc['icon'], 18) . '</span><div><small>' . e($nc['label']) . '</small><b>' . e($sn['text']) . '</b></div><button type="button" class="btn sm" data-say="' . e($sn['text']) . '">' . icon('volume', 15) . ' Repeat voice</button></div>';
+        echo '<div class="say-bar" role="status"><span class="say-ico">' . icon($nc['icon'], 18) . '</span><div><small>' . e($nc['label']) . '</small><b>' . e($sn['text']) . '</b></div><button type="button" class="btn sm"' . voice_attrs($sn['text'], $sn['key'] ?? null, $sn['tail'] ?? null) . '>' . icon('volume', 15) . ' Repeat voice</button></div>';
     }
 }
 

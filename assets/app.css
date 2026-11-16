@@ -515,3 +515,7 @@ label { display: block; font-weight: 600; color: var(--ink); font-size: 12.8px; 
 .vo-n { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--surface-2); color: var(--ink); }
 .voice-opt:has(input:checked) .vo-n { background: var(--brand); color: #fff; }
 .vo-t { flex: 1; min-width: 0; } .vo-t b { display: block; color: var(--ink); font-size: 13.5px; } .vo-t small { display: block; color: var(--muted); font-size: 12px; } .vo-real { color: var(--brand) !important; }
+.voice-opt.rec { border-color: color-mix(in srgb, var(--gold) 55%, transparent); } .voice-opt.rec .vo-n { background: var(--gold); color: var(--navy-900); }
+/* printable forms */
+.print-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; } .print-row .fld { flex: 1; min-width: 120px; margin: 0; }
+.print-out { margin-top: 12px; } .batch-card { border: 2px solid color-mix(in srgb, var(--brand) 35%, transparent); }

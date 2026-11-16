@@ -144,7 +144,7 @@ function core_schema()
     // columns added after v1.0 (older installs get them here)
     db_add_missing('users', ['team' => 'TEXT']);
     db_add_missing('payments', ['section' => 'TEXT']);
-    db_add_missing('notifications', ['kind' => 'TEXT']);
+    db_add_missing('notifications', ['kind' => 'TEXT', 'msg_key' => 'TEXT', 'say_tail' => 'LONGTEXT']);
 }
 
 /** Make sure the schema is current (data-preserving) and the starting data exists. */

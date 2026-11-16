@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.5.1 (16 Nov 2026)
+## Current version: 1.6.0 (16 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -115,6 +115,20 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   `VOICE_STYLES` / `voice_style()` in functions.php, setting `voice_style`, `<body data-voice>`; JS `STYLES` + `pickVoice()` choose the
   closest real voice on each device by accent and gender). Owner is listening to them and will say which one to keep as default.
 
+- **v1.6** (16 Nov):
+  - **Recorded voice (owner chose sample No. 1, warm American woman)** is the default for all spoken alerts: `assets/voice/<key>.mp3`
+    (one per `VOICE_MSGS` key + `candidate_chat` + `general`). The recording says the fixed words; the name/position
+    (`VOICE_TAILS`, stored per notification in `notifications.say_tail`, key in `msg_key`) follows in the device voice
+    (Admin toggle "also read the name"). If the Super Admin changes a message's words, that alert falls back to the device
+    voice for the whole text (the recording would no longer match). Voice style 0 = recorded; 1–10 = device voices.
+    Recordings cannot be made on the hosting; to change a recording, replace the MP3 with the same file name.
+  - **Printable Forms** (`forms.php`, `inc/modules/forms.php`, area Control; Super Admin, or roles given the module):
+    upload a blank PDF form, set serial prefix/digits/next number, position (mm from left/top), text size, first or every page,
+    optional white box. "Print N copies" reserves the next N numbers in one transaction, records a Print history row
+    (who, when, from–to, note) and the browser builds one PDF with N copies, each stamped with its serial
+    (`assets/forms.js` + `assets/vendor/pdf-lib.min.js`, MIT licence file beside it). "Test the number position" uses no numbers.
+    Reprint keeps the same numbers and is recorded with a reason. The next number can never be set below printed numbers.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -124,6 +138,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-16 · v1.6.0 · Recorded professional voice for all alerts (owner's choice No. 1); Printable Forms with running serial numbers and print history.
 - 2026-11-16 · v1.5.1 · Ten selectable voice styles for spoken alerts with Listen buttons.
 - 2026-11-15 · v1.5.0 · HR one-box File done, assign from the same screen, admin-editable spoken messages, repeat voice, admin alerts (file/payment/lead/deal), deployment chat with portal link + WhatsApp + camera/location, phone-app candidate portal.
 - 2026-11-15 · v1.4.0 · Simplified reception/HR/deployment flow: CV optional + camera, voice alerts, CV preview, plan-free file form, deployment workspace, locations in chat.

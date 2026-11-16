@@ -158,13 +158,13 @@ function badge($text)
 }
 
 /** Validate and store an uploaded file. Returns [relative path or null, error or null]. */
-function upload_file($field, $sub = 'files', $required = false, $types = null)
+function upload_file($field, $sub = 'files', $required = false, $types = null, $maxMb = 10)
 {
     $types = $types ?: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'];
     if (empty($_FILES[$field]) || $_FILES[$field]['error'] === UPLOAD_ERR_NO_FILE) return [null, $required ? 'Please attach the file.' : null];
     $f = $_FILES[$field];
     if ($f['error'] !== UPLOAD_ERR_OK) return [null, 'The file could not be uploaded (error ' . (int)$f['error'] . ').'];
-    if ($f['size'] > 10 * 1024 * 1024) return [null, 'The file is larger than 10 MB.'];
+    if ($f['size'] > $maxMb * 1024 * 1024) return [null, 'The file is larger than ' . $maxMb . ' MB.'];
     $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
     if (!in_array($ext, $types, true)) return [null, 'Allowed file types: ' . strtoupper(implode(', ', $types)) . '.'];
     // check the real content, not only the name (stops disguised files)
@@ -191,9 +191,11 @@ function file_link($path, $label = 'Download')
 }
 
 /** Notification for a staff user. */
-function notify($uid, $text, $link = '', $kind = 'system')
+function notify($uid, $text, $link = '', $kind = 'system', $key = null, array $vars = [])
 {
-    if ($uid) ins('notifications', ['user_id' => $uid, 'kind' => $kind, 'text' => $text, 'link' => $link, 'is_read' => 0, 'at' => now()]);
+    if (!$uid) return;
+    $tail = $key && isset(VOICE_TAILS[$key]) ? voice_fill(VOICE_TAILS[$key], $vars) : null;
+    ins('notifications', ['user_id' => $uid, 'kind' => $kind, 'text' => $text, 'link' => $link, 'is_read' => 0, 'at' => now(), 'msg_key' => $key, 'say_tail' => $tail]);
 }
 /** Notification types: label, default sound and icon (the Super Admin changes them in Admin → Notification sounds). */
 const NOTIF_KINDS = [
@@ -228,6 +230,7 @@ const VOICE_MSGS = [
 ];
 /** Ten voice styles for spoken alerts (Admin → Notification sounds). [name, description]; the browser picks the closest real voice. */
 const VOICE_STYLES = [
+    0 => ['Professional recorded voice (No. 1)', 'Warm American woman, studio-quality recording. Recommended.'],
     1 => ['Clear British — female', 'Calm UK English woman, normal speed.'],
     2 => ['Clear British — male', 'Calm UK English man, normal speed.'],
     3 => ['American — female', 'US English woman, natural and bright.'],
@@ -239,21 +242,43 @@ const VOICE_STYLES = [
     9 => ['Australian — female', 'AU English woman, friendly.'],
     10 => ['Soft & friendly', 'US woman, gentle higher tone, relaxed speed.'],
 ];
-function voice_style() { $v = (int)setting('voice_style', '1'); return isset(VOICE_STYLES[$v]) ? $v : 1; }
+function voice_style() { $v = (int)setting('voice_style', '0'); return isset(VOICE_STYLES[$v]) ? $v : 0; }
+/** With the recorded voice, the fixed words are a recording and these details (name, position…) follow in the device voice. */
+const VOICE_TAILS = ['hr_new' => '{name}, applying for {position}.', 'reception_file' => '{name}, {position}.', 'deploy_new' => '{name}, {position}.',
+    'deploy_portal' => '{name}.', 'deploy_chat' => '{name}.', 'deploy_response' => '{name}: {seq} interview, {response}.', 'admin_file' => '{name}, {position}. {amount}.',
+    'admin_lead' => '{name}.', 'admin_payment' => '{amount}, from {party}.', 'admin_deal' => '{name}, {amount}.'];
+function voice_fill($t, array $vars)
+{
+    $t = preg_replace_callback('/\{(\w+)\}/', function ($m) use ($vars) { return (string)($vars[$m[1]] ?? ''); }, (string)$t);
+    $t = preg_replace(['/\s+([,.:])/', '/,\s*,/', '/,\s*\./', '/:\s*\./', '/\s{2,}/', '/^[\s,.:]+/'], ['$1', ',', '.', '.', ' ', ''], $t);
+    return trim($t, " ,");
+}
+/** Recording for an alert, when the recorded voice is chosen and the Super Admin has not changed that message's words. */
+function voice_clip($key)
+{
+    static $custom = null;
+    if (!$key || voice_style() !== 0 || !is_file(ROOT . '/assets/voice/' . $key . '.mp3')) return '';
+    if ($custom === null) $custom = json_decode((string)setting('voice_msgs', ''), true) ?: [];
+    if (!empty($custom[$key])) return '';
+    return 'assets/voice/' . $key . '.mp3?v=' . APP_VERSION;
+}
+/** data-* attributes for a "Repeat" button. */
+function voice_attrs($text, $key = null, $tail = null)
+{
+    $clip = voice_clip($key);
+    return ' data-say="' . e($text) . '"' . ($clip ? ' data-clip="' . e($clip) . '" data-tail="' . e(setting('voice_tail', '1') === '1' ? (string)$tail : '') . '"' : '');
+}
 /** Text of an alert with {placeholders} filled in. */
 function voice_text($key, array $vars = [])
 {
     static $saved = null;
     if ($saved === null) $saved = json_decode((string)setting('voice_msgs', ''), true) ?: [];
-    $t = trim((string)($saved[$key] ?? '')) ?: (VOICE_MSGS[$key][2] ?? '');
-    $t = preg_replace_callback('/\{(\w+)\}/', function ($m) use ($vars) { return (string)($vars[$m[1]] ?? ''); }, $t);
-    $t = preg_replace(['/\s+([,.])/', '/,\s*,/', '/,\s*\./', '/\s{2,}/'], ['$1', ',', '.', ' '], $t);
-    return trim($t, " ,");
+    return voice_fill(trim((string)($saved[$key] ?? '')) ?: (VOICE_MSGS[$key][2] ?? ''), $vars);
 }
 /** Notify one user with a configurable message. */
 function notify_msg($uid, $key, array $vars, $link = '')
 {
-    if ($uid) notify($uid, voice_text($key, $vars), $link, VOICE_MSGS[$key][1] ?? 'system');
+    if ($uid) notify($uid, voice_text($key, $vars), $link, VOICE_MSGS[$key][1] ?? 'system', $key, $vars);
 }
 /** System task (Tasks & Alerts). $key avoids duplicates for the same auto task. */
 function add_task($title, $severity = 'Medium', $due = null, $owner = null, $link = '', $key = null)
@@ -351,7 +376,7 @@ function record_payment($entity, $id, $amount, array $o = [])
     $jid = post_journal($o['pay_date'] ?? today(), ($dir === 'in' ? 'Receipt ' : 'Payment ') . $ref . ' - ' . $entity . ' #' . $id, $lines, 'payment', $pid);
     q('UPDATE payments SET journal_id=? WHERE id=?', [$jid, $pid]);
     audit('payment', $entity, $id, null, ['ref' => $ref, 'amount' => $amount, 'direction' => $dir, 'type' => $o['pay_type'] ?? null]);
-    if ($dir === 'in' && empty($o['silent']) && function_exists('notify_super') && function_exists('me') && me()) notify_super(voice_text('admin_payment', ['amount' => money($amount), 'party' => ($o['party'] ?? '') ?: 'a customer', 'ref' => $ref]), 'finance.php?t=ledger', 'payment');
+    if ($dir === 'in' && empty($o['silent']) && function_exists('notify_super') && function_exists('me') && me()) notify_super(voice_text('admin_payment', $pv = ['amount' => money($amount), 'party' => ($o['party'] ?? '') ?: 'a customer', 'ref' => $ref]), 'finance.php?t=ledger', 'payment', 'admin_payment', $pv);
     return $pid;
 }
 /** Reverse a payment: new negative entry with reason; original kept and flagged. */

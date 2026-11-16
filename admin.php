@@ -37,8 +37,10 @@ if (is_post()) {
         foreach (VOICE_MSGS as $k => $d) { $v = trim(mb_substr((string)($_POST['msg'][$k] ?? ''), 0, 300)); if ($v !== '' && $v !== $d[2]) $vm[$k] = $v; }
         $oldVm = json_decode((string)setting('voice_msgs', ''), true) ?: [];
         if ($vm != $oldVm) { set_setting('voice_msgs', json_encode($vm)); audit('voice-messages', 'settings', null, $oldVm, $vm); }
-        $vs = (int)p('voice_style');
+        $vs = p('voice_style') === '' ? voice_style() : (int)p('voice_style');
         if (isset(VOICE_STYLES[$vs]) && $vs !== voice_style()) { audit('voice-style', 'settings', null, ['voice_style' => voice_style()], ['voice_style' => $vs]); set_setting('voice_style', (string)$vs); }
+        $vt = p('voice_tail') ? '1' : '0';
+        if ($vt !== setting('voice_tail', '1')) { set_setting('voice_tail', $vt); audit('voice-tail', 'settings', null, null, ['voice_tail' => $vt]); }
         flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
         redirect('admin.php?t=sounds');
     }
@@ -122,14 +124,14 @@ if ($t === 'sounds') {
     echo '</tbody></table></div>';
     $vm = json_decode((string)setting('voice_msgs', ''), true) ?: [];
     echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Voice style</h3></div><p class="muted small" style="padding:0 18px">Press <b>Listen</b> to hear each voice, choose one, then press Save. Everyone hears the chosen voice. The exact voice depends on the computer or phone; the name under each style shows the voice this device will use.</p><div class="voice-grid">';
-    foreach (VOICE_STYLES as $n => $vs) echo '<label class="voice-opt"><input type="radio" name="voice_style" value="' . $n . '"' . ($n === voice_style() ? ' checked' : '') . '><span class="vo-n">' . $n . '</span><span class="vo-t"><b>' . e($vs[0]) . '</b><small>' . e($vs[1]) . '</small><small class="vo-real" data-voice-name="' . $n . '"></small></span><button type="button" class="btn ghost sm" data-voice-test="' . $n . '">' . icon('volume', 14) . ' Listen</button></label>';
-    echo '</div>';
+    foreach (VOICE_STYLES as $n => $vs) echo '<label class="voice-opt' . ($n ? '' : ' rec') . '"><input type="radio" name="voice_style" value="' . $n . '"' . ($n === voice_style() ? ' checked' : '') . '><span class="vo-n">' . ($n ?: '★') . '</span><span class="vo-t"><b>' . e($vs[0]) . '</b><small>' . e($vs[1]) . '</small>' . ($n ? '<small class="vo-real" data-voice-name="' . $n . '"></small>' : '<small class="vo-real">Same sound on every computer and phone</small>') . '</span><button type="button" class="btn ghost sm" data-voice-test="' . $n . '">' . icon('volume', 14) . ' Listen</button></label>';
+    echo '</div><label class="check" style="padding:0 18px 6px;display:flex"><input type="checkbox" name="voice_tail" value="1"' . (setting('voice_tail', '1') === '1' ? ' checked' : '') . '> With the recorded voice, also read the name and position after the recording (device voice)</label>';
     echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Spoken messages</h3></div><p class="muted small" style="padding:0 18px">The words shown in the alert and read aloud. Keep the words in curly brackets — they are replaced with the real name, position or amount. Leave a box empty to use the standard text.</p>'
         . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Who hears it / when</th><th>Message</th><th></th></tr></thead><tbody>';
     foreach (VOICE_MSGS as $k => $d) {
         preg_match_all('/\{\w+\}/', $d[2], $ph);
         echo '<tr><td><b>' . e($d[0]) . '</b><br><small class="muted">Words: ' . e(implode(' ', $ph[0])) . '</small></td><td style="min-width:260px"><input id="vm_' . $k . '" name="msg[' . $k . ']" maxlength="300" value="' . e($vm[$k] ?? $d[2]) . '" placeholder="' . e($d[2]) . '"></td>'
-            . '<td><button type="button" class="btn ghost sm" data-say-input="vm_' . $k . '">' . icon('volume', 14) . ' Listen</button></td></tr>';
+            . '<td><button type="button" class="btn ghost sm" data-say-input="vm_' . $k . '" data-clip-src="' . (is_file(ROOT . '/assets/voice/' . $k . '.mp3') ? 'assets/voice/' . $k . '.mp3' : '') . '" data-tail-tpl="' . e(VOICE_TAILS[$k] ?? '') . '">' . icon('volume', 14) . ' Listen</button></td></tr>';
     }
     echo '</tbody></table></div><div class="form-actions" style="padding:0 18px 16px"><button class="btn">' . icon('check', 15) . ' Save alert settings</button></div></form>';
 }

@@ -340,8 +340,8 @@ function candidate_overview($c)
 function file_done_notify($r, $paid)
 {
     $v = ['name' => $r['full_name'], 'position' => $r['applied_position'], 'amount' => money($paid)];
-    notify_role('Reception', voice_text('reception_file', $v), ent_url('candidates', $r['id']), 'file');
-    notify_super(voice_text('admin_file', $v), ent_url('candidates', $r['id']), 'payment');
+    notify_role('Reception', voice_text('reception_file', $v), ent_url('candidates', $r['id']), 'file', 'reception_file', $v);
+    notify_super(voice_text('admin_file', $v), ent_url('candidates', $r['id']), 'payment', 'admin_file', $v);
 }
 /** HR / Reception see a short screen while the candidate is with them. */
 function candidate_simple($r)

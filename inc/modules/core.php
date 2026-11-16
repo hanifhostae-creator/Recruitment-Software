@@ -149,16 +149,16 @@ seeder(function () {
 }, 1);
 
 /** Notify every active user whose role name starts with $rolePrefix (for example Reception), except the person acting. */
-function notify_role($rolePrefix, $text, $link = '', $kind = 'system')
+function notify_role($rolePrefix, $text, $link = '', $kind = 'system', $key = null, array $vars = [])
 {
     foreach (rows('SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND r.name LIKE ?', [$rolePrefix . '%']) as $x)
-        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link, $kind);
+        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link, $kind, $key, $vars);
 }
 /** Notify every Super Admin (used for "new entry" and "payment received" alerts on the admin dashboard). */
-function notify_super($text, $link = '', $kind = 'entry')
+function notify_super($text, $link = '', $kind = 'entry', $key = null, array $vars = [])
 {
     foreach (rows('SELECT u.id FROM users u JOIN roles r ON r.id=u.role_id WHERE u.active=1 AND r.is_super=1') as $x)
-        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link, $kind);
+        if ((int)$x['id'] !== (int)(me()['id'] ?? 0)) notify($x['id'], $text, $link, $kind, $key, $vars);
 }
 /** One-time data upgrades for installs created by an earlier version (never removes anything). */
 function apply_upgrades()

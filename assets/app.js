@@ -272,7 +272,7 @@
   // spoken announcement (browser voice, English) — 10 styles chosen by the Super Admin
   var FEM = /female|woman|zira|susan|hazel|heera|kate|serena|libby|sonia|samantha|karen|moira|tessa|veena|catherine|aria|jenny|natasha|neerja|kalpana|swara|emma|amy|olivia|ava|allison|victoria|fiona|google us english|google uk english female/i,
     MAL = /male|man\b|david|mark|george|ravi|daniel|alex|fred|ryan|guy|rishi|james|william|thomas|prabhat|hemant|arthur|oliver|aaron|google uk english male/i;
-  var STYLES = { 1: ['en-GB', 'f', .92, 1], 2: ['en-GB', 'm', .92, 1], 3: ['en-US', 'f', .95, 1.05], 4: ['en-US', 'm', .95, 1], 5: ['en-IN', 'f', .88, 1],
+  var STYLES = { 0: ['en-US', 'f', .95, 1.05], 1: ['en-GB', 'f', .92, 1], 2: ['en-GB', 'm', .92, 1], 3: ['en-US', 'f', .95, 1.05], 4: ['en-US', 'm', .95, 1], 5: ['en-IN', 'f', .88, 1],
     6: ['en-IN', 'm', .88, 1], 7: ['en-GB', 'f', .78, 1, ''], 8: ['en-GB', 'm', .84, .88, 'Attention please. '], 9: ['en-AU', 'f', .92, 1.05], 10: ['en-US', 'f', .9, 1.18] };
   function pickVoice(st) {
     var vs = window.speechSynthesis ? window.speechSynthesis.getVoices() : [], lang = st[0].toLowerCase(), g = st[1], i, best = null, score = -1;
@@ -287,7 +287,18 @@
     }
     return best;
   }
-  function styleNo(n) { n = n || parseInt(document.body.getAttribute('data-voice') || '1', 10); return STYLES[n] ? n : 1; }
+  function styleNo(n) { if (n === undefined || n === null || isNaN(n)) n = parseInt(document.body.getAttribute('data-voice') || '0', 10); return STYLES[n] ? n : 0; }
+  // recorded voice: play the recording, then read the name with the device voice; falls back to the device voice
+  function announce(clip, tail, full, force) {
+    if (!force && !soundOn()) return;
+    if (!clip) { speak(full || tail, force); return; }
+    try {
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      var a = new Audio(clip); a.volume = 1;
+      a.onended = function () { if (tail) speak(tail, true, 0); };
+      var pr = a.play(); if (pr && pr.catch) pr.catch(function () { speak(full || tail, force); });
+    } catch (e) { speak(full || tail, force); }
+  }
   function speak(text, force, style) {
     if (!text || (!force && !soundOn()) || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
     try {
@@ -306,10 +317,11 @@
     var b = ev.target.closest('[data-voice-test]'); if (!b) return;
     ev.preventDefault(); unlock(); var n = parseInt(b.getAttribute('data-voice-test'), 10);
     var r = b.closest('label') && b.closest('label').querySelector('input[type=radio]'); if (r) r.checked = true;
+    if (n === 0) { var tc = document.querySelector('input[name=voice_tail]'); announce('assets/voice/hr_new.mp3', !tc || tc.checked ? 'Ahmed Khan, applying for Driver.' : '', 'New candidate entered: Ahmed Khan, applying for Driver.', true); return; }
     speak('New candidate entered: Ahmed Khan, applying for Driver.', true, n);
   });
   if (window.speechSynthesis) window.speechSynthesis.getVoices();
-  function toast(text, link, label, iconHtml, say) {
+  function toast(text, link, label, iconHtml, it) {
     var box = document.getElementById('toasts'); if (!box) return;
     var w = document.createElement('div'); w.className = 'toast';
     var a = document.createElement(link ? 'a' : 'div'); a.className = 'toast-main'; if (link) a.href = link;
@@ -318,19 +330,21 @@
     a.querySelector('span').textContent = text;
     if (iconHtml) a.querySelector('.toast-i').innerHTML = iconHtml; else a.querySelector('.toast-i').remove();
     w.appendChild(a);
-    if (say) { var r = document.createElement('button'); r.type = 'button'; r.className = 'toast-rep'; r.title = 'Repeat the voice message'; r.setAttribute('aria-label', 'Repeat'); r.setAttribute('data-say', say); r.innerHTML = '&#8635;'; w.appendChild(r); }
+    if (it) { var r = document.createElement('button'); r.type = 'button'; r.className = 'toast-rep'; r.title = 'Repeat the voice message'; r.setAttribute('aria-label', 'Repeat'); r.setAttribute('data-say', it.full || text); if (it.clip) { r.setAttribute('data-clip', it.clip); r.setAttribute('data-tail', it.say || ''); } r.innerHTML = '&#8635;'; w.appendChild(r); }
     var x = document.createElement('button'); x.type = 'button'; x.className = 'toast-x'; x.setAttribute('aria-label', 'Close'); x.innerHTML = '&times;'; x.addEventListener('click', function () { w.remove(); }); w.appendChild(x);
     box.appendChild(w); setTimeout(function () { if (w.parentNode) w.parentNode.removeChild(w); }, 20000);
   }
   // "Repeat" buttons: read a notification again
   document.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-say]');
-    if (b) { ev.preventDefault(); ev.stopPropagation(); unlock(); speak(b.getAttribute('data-say'), true); b.classList.remove('spin'); void b.offsetWidth; b.classList.add('spin'); return; }
+    if (b) { ev.preventDefault(); ev.stopPropagation(); unlock(); announce(b.getAttribute('data-clip'), b.getAttribute('data-tail'), b.getAttribute('data-say'), true); b.classList.remove('spin'); void b.offsetWidth; b.classList.add('spin'); return; }
     var t = ev.target.closest('[data-say-input]');
     if (t) {
       var inp = document.getElementById(t.getAttribute('data-say-input')); if (!inp) return;
       var sample = { name: 'Ahmed Khan', position: 'Driver', amount: 'AED 1,500.00', party: 'Ahmed Khan', type: 'enquiry', seq: '1st', response: 'Selected', ref: 'RCT-0001' };
-      var chosen = document.querySelector('input[name=voice_style]:checked');
+      var chosen = document.querySelector('input[name=voice_style]:checked'), fill = function (x) { return (x || '').replace(/\{(\w+)\}/g, function (m, k) { return sample[k] || ''; }); };
+      var tailOn = document.querySelector('input[name=voice_tail]'); tailOn = !tailOn || tailOn.checked;
+      if (chosen && chosen.value === '0' && t.getAttribute('data-clip-src') && inp.value.trim() === inp.placeholder) { announce(t.getAttribute('data-clip-src'), tailOn ? fill(t.getAttribute('data-tail-tpl')) : '', fill(inp.placeholder), true); return; }
       speak((inp.value || inp.placeholder).replace(/\{(\w+)\}/g, function (m, k) { return sample[k] || ''; }), true, chosen ? parseInt(chosen.value, 10) : 0);
     }
   }, true);
@@ -354,8 +368,8 @@
       document.title = (d.count + (d.chat || 0) > 0 ? '(' + (d.count + (d.chat || 0)) + ') ' : '') + baseTitle;
       if (d.items && d.items.length) {
         var loud = d.items.filter(function (it) { return !it.quiet; });
-        if (loud.length) { beep(false, loud[0].sound); if (loud[0].say) setTimeout(function () { speak(loud[0].say); }, 900); }
-        d.items.forEach(function (it) { if (!it.quiet) toast(it.text, it.link, it.label, it.icon, it.say || it.text); if (it.id > since) since = it.id; });
+        if (loud.length) { beep(false, loud[0].sound); if (loud[0].say || loud[0].clip) setTimeout(function () { announce(loud[0].clip, loud[0].say, loud[0].full); }, 900); }
+        d.items.forEach(function (it) { if (!it.quiet) toast(it.text, it.link, it.label, it.icon, it); if (it.id > since) since = it.id; });
         if (window.rhLiveRefresh) window.rhLiveRefresh();
       }
     }).catch(function () {});

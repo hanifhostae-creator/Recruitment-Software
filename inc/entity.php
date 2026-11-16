@@ -215,7 +215,7 @@ function field_from_post($k, $f, $old, array &$data, array &$errors, $isNew)
     $label = $f['label'];
     $type = $f['type'];
     if ($type === 'file') {
-        list($path, $err) = upload_file($k, $f['dir'] ?? 'files', ($isNew && (!empty($f['req']) || !empty($f['req_new']))) || (!empty($f['req']) && empty($old[$k])));
+        list($path, $err) = upload_file($k, $f['dir'] ?? 'files', ($isNew && (!empty($f['req']) || !empty($f['req_new']))) || (!empty($f['req']) && empty($old[$k])), $f['types'] ?? null, $f['max_mb'] ?? 10);
         if ($err) $errors[] = $label . ': ' . $err;
         if ($path) $data[$k] = $path;
         return;
@@ -509,7 +509,7 @@ function crud_save($d, $base, $mod, array $opt)
         $rec = row('SELECT * FROM ' . $d['table'] . ' WHERE id=?', [$id]);
         $title = 'New ' . strtolower($d['one']) . ': ' . ($rec ? ent_row_title($d, $rec) : '#' . $id);
         if (!empty($d['notify_new'][0])) notify_role($d['notify_new'][0], $title, ent_url($d['key'], $id), $d['notify_new'][1] ?? 'lead');
-        if (($d['notify_new'][1] ?? '') === 'lead') notify_super(voice_text('admin_lead', ['type' => strtolower($d['one']), 'name' => $rec ? ent_row_title($d, $rec) : '#' . $id]), ent_url($d['key'], $id), 'lead');
+        if (($d['notify_new'][1] ?? '') === 'lead') notify_super(voice_text('admin_lead', $lv = ['type' => strtolower($d['one']), 'name' => $rec ? ent_row_title($d, $rec) : '#' . $id]), ent_url($d['key'], $id), 'lead', 'admin_lead', $lv);
         else notify_super($title, ent_url($d['key'], $id), 'entry');
     }
     flash($d['one'] . ($isNew ? ' created.' : ' updated.'));
