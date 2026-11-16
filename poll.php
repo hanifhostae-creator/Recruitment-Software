@@ -15,8 +15,11 @@ if (me()) {
         $c = $cfg[$n['kind']] ?? $cfg['system'];
         $full = trim(preg_replace('/\s*\([^)]*\)/', '', $n['text']));
         $clip = $c['on'] && $c['voice'] ? voice_clip($n['msg_key']) : '';
+        $tail = (string)$n['say_tail'];
+        // alerts without their own recording: the recorded voice says "You have a new notification", then the text is read
+        if (!$clip && !$n['msg_key'] && $c['on'] && $c['voice'] && ($clip = voice_clip('general'))) $tail = $full;
         $out['items'][] = ['id' => (int)$n['id'], 'text' => $n['text'], 'link' => 'notifications.php?open=' . $n['id'], 'label' => $c['label'], 'sound' => $c['on'] ? $c['sound'] : 'none', 'quiet' => !$c['on'], 'icon' => icon($c['icon'], 18),
-            'say' => $c['on'] && $c['voice'] ? ($clip ? ($tailOn ? (string)$n['say_tail'] : '') : $full) : '', 'clip' => $clip, 'full' => $full];
+            'say' => $c['on'] && $c['voice'] ? ($clip ? ($tailOn ? $tail : '') : $full) : '', 'clip' => $clip, 'full' => $full];
     }
     $out['chat'] = chat_unread_total();
 } elseif (!empty($_SESSION['portal']) && $_SESSION['portal']['type'] === 'candidate') {

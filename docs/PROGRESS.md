@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.6.0 (16 Nov 2026)
+## Current version: 1.6.1 (16 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -138,6 +138,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-16 · v1.6.1 · Recorded voice switched on for existing installs (an earlier saved device-voice choice was overriding it); alerts without their own recording start with the recorded "You have a new notification"; Print history "Printed by" column fixed.
 - 2026-11-16 · v1.6.0 · Recorded professional voice for all alerts (owner's choice No. 1); Printable Forms with running serial numbers and print history.
 - 2026-11-16 · v1.5.1 · Ten selectable voice styles for spoken alerts with Listen buttons.
 - 2026-11-15 · v1.5.0 · HR one-box File done, assign from the same screen, admin-editable spoken messages, repeat voice, admin alerts (file/payment/lead/deal), deployment chat with portal link + WhatsApp + camera/location, phone-app candidate portal.
