@@ -226,6 +226,20 @@ const VOICE_MSGS = [
     'admin_payment' => ['Super Admin — payment received', 'payment', 'Payment received: {amount} from {party}.'],
     'admin_deal' => ['Super Admin — deal won', 'payment', 'Deal done: {name}, value {amount}.'],
 ];
+/** Ten voice styles for spoken alerts (Admin → Notification sounds). [name, description]; the browser picks the closest real voice. */
+const VOICE_STYLES = [
+    1 => ['Clear British — female', 'Calm UK English woman, normal speed.'],
+    2 => ['Clear British — male', 'Calm UK English man, normal speed.'],
+    3 => ['American — female', 'US English woman, natural and bright.'],
+    4 => ['American — male', 'US English man, natural.'],
+    5 => ['Indian English — female', 'Familiar accent for most staff, a little slower.'],
+    6 => ['Indian English — male', 'Familiar accent, a little slower.'],
+    7 => ['Slow & extra clear', 'UK woman, slow speed, short pause before the message.'],
+    8 => ['Office announcement', 'UK man, deeper and slower, starts with "Attention please".'],
+    9 => ['Australian — female', 'AU English woman, friendly.'],
+    10 => ['Soft & friendly', 'US woman, gentle higher tone, relaxed speed.'],
+];
+function voice_style() { $v = (int)setting('voice_style', '1'); return isset(VOICE_STYLES[$v]) ? $v : 1; }
 /** Text of an alert with {placeholders} filled in. */
 function voice_text($key, array $vars = [])
 {

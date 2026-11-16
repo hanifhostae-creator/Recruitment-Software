@@ -2,7 +2,7 @@
 // Bootstrap — every page starts with: require __DIR__ . '/inc/boot.php';
 if (!defined('ROOT')) define('ROOT', dirname(__DIR__));
 define('APP_NAME', 'RH Management');
-define('APP_VERSION', '1.5.0');
+define('APP_VERSION', '1.5.1');
 
 // Site configuration (database, demo mode, secret key). inc/config.php is never committed — copy inc/config.sample.php.
 if (is_file(__DIR__ . '/config.php')) require __DIR__ . '/config.php';

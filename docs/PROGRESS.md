@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.5.0 (15 Nov 2026)
+## Current version: 1.5.1 (16 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -111,6 +111,10 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   - **Candidate portal = phone app**: bottom tab bar (Chat, Interviews, Payments, Profile), home = status card + pending
     interview cards (Open map, quick result) + chat. Permissions-Policy now allows geolocation=(self).
 
+- **v1.5.1** (16 Nov): **10 voice styles** for spoken alerts (Admin → Notification sounds → Voice style, each with Listen;
+  `VOICE_STYLES` / `voice_style()` in functions.php, setting `voice_style`, `<body data-voice>`; JS `STYLES` + `pickVoice()` choose the
+  closest real voice on each device by accent and gender). Owner is listening to them and will say which one to keep as default.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -120,6 +124,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-16 · v1.5.1 · Ten selectable voice styles for spoken alerts with Listen buttons.
 - 2026-11-15 · v1.5.0 · HR one-box File done, assign from the same screen, admin-editable spoken messages, repeat voice, admin alerts (file/payment/lead/deal), deployment chat with portal link + WhatsApp + camera/location, phone-app candidate portal.
 - 2026-11-15 · v1.4.0 · Simplified reception/HR/deployment flow: CV optional + camera, voice alerts, CV preview, plan-free file form, deployment workspace, locations in chat.
 - 2026-11-15 · v1.3.0 · Welcome banner, no owner check-in, premium dashboard / sidebar animations.

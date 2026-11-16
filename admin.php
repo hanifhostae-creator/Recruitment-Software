@@ -37,6 +37,8 @@ if (is_post()) {
         foreach (VOICE_MSGS as $k => $d) { $v = trim(mb_substr((string)($_POST['msg'][$k] ?? ''), 0, 300)); if ($v !== '' && $v !== $d[2]) $vm[$k] = $v; }
         $oldVm = json_decode((string)setting('voice_msgs', ''), true) ?: [];
         if ($vm != $oldVm) { set_setting('voice_msgs', json_encode($vm)); audit('voice-messages', 'settings', null, $oldVm, $vm); }
+        $vs = (int)p('voice_style');
+        if (isset(VOICE_STYLES[$vs]) && $vs !== voice_style()) { audit('voice-style', 'settings', null, ['voice_style' => voice_style()], ['voice_style' => $vs]); set_setting('voice_style', (string)$vs); }
         flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
         redirect('admin.php?t=sounds');
     }
@@ -119,6 +121,9 @@ if ($t === 'sounds') {
     }
     echo '</tbody></table></div>';
     $vm = json_decode((string)setting('voice_msgs', ''), true) ?: [];
+    echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Voice style</h3></div><p class="muted small" style="padding:0 18px">Press <b>Listen</b> to hear each voice, choose one, then press Save. Everyone hears the chosen voice. The exact voice depends on the computer or phone; the name under each style shows the voice this device will use.</p><div class="voice-grid">';
+    foreach (VOICE_STYLES as $n => $vs) echo '<label class="voice-opt"><input type="radio" name="voice_style" value="' . $n . '"' . ($n === voice_style() ? ' checked' : '') . '><span class="vo-n">' . $n . '</span><span class="vo-t"><b>' . e($vs[0]) . '</b><small>' . e($vs[1]) . '</small><small class="vo-real" data-voice-name="' . $n . '"></small></span><button type="button" class="btn ghost sm" data-voice-test="' . $n . '">' . icon('volume', 14) . ' Listen</button></label>';
+    echo '</div>';
     echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Spoken messages</h3></div><p class="muted small" style="padding:0 18px">The words shown in the alert and read aloud. Keep the words in curly brackets — they are replaced with the real name, position or amount. Leave a box empty to use the standard text.</p>'
         . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Who hears it / when</th><th>Message</th><th></th></tr></thead><tbody>';
     foreach (VOICE_MSGS as $k => $d) {

@@ -269,17 +269,45 @@
   document.querySelectorAll('[data-test-sound]').forEach(function (b) {
     b.addEventListener('click', function () { var sel = document.getElementById(b.getAttribute('data-test-sound')); unlock(); beep(true, sel ? sel.value : 'chime'); });
   });
-  // spoken announcement (browser voice, English)
-  function speak(text, force) {
+  // spoken announcement (browser voice, English) — 10 styles chosen by the Super Admin
+  var FEM = /female|woman|zira|susan|hazel|heera|kate|serena|libby|sonia|samantha|karen|moira|tessa|veena|catherine|aria|jenny|natasha|neerja|kalpana|swara|emma|amy|olivia|ava|allison|victoria|fiona|google us english|google uk english female/i,
+    MAL = /male|man\b|david|mark|george|ravi|daniel|alex|fred|ryan|guy|rishi|james|william|thomas|prabhat|hemant|arthur|oliver|aaron|google uk english male/i;
+  var STYLES = { 1: ['en-GB', 'f', .92, 1], 2: ['en-GB', 'm', .92, 1], 3: ['en-US', 'f', .95, 1.05], 4: ['en-US', 'm', .95, 1], 5: ['en-IN', 'f', .88, 1],
+    6: ['en-IN', 'm', .88, 1], 7: ['en-GB', 'f', .78, 1, ''], 8: ['en-GB', 'm', .84, .88, 'Attention please. '], 9: ['en-AU', 'f', .92, 1.05], 10: ['en-US', 'f', .9, 1.18] };
+  function pickVoice(st) {
+    var vs = window.speechSynthesis ? window.speechSynthesis.getVoices() : [], lang = st[0].toLowerCase(), g = st[1], i, best = null, score = -1;
+    for (i = 0; i < vs.length; i++) {
+      var v = vs[i], l = (v.lang || '').toLowerCase().replace('_', '-'), sc = 0;
+      if (l.indexOf('en') !== 0) continue;
+      if (l === lang) sc += 10; else if (l.slice(0, 2) === 'en') sc += 2;
+      var isF = FEM.test(v.name) && !/\bmale\b/i.test(v.name.replace(/female/i, '')), isM = MAL.test(v.name) && !isF;
+      if ((g === 'f' && isF) || (g === 'm' && isM)) sc += 6;
+      if (/natural|neural|online|google/i.test(v.name)) sc += 1;
+      if (sc > score) { score = sc; best = v; }
+    }
+    return best;
+  }
+  function styleNo(n) { n = n || parseInt(document.body.getAttribute('data-voice') || '1', 10); return STYLES[n] ? n : 1; }
+  function speak(text, force, style) {
     if (!text || (!force && !soundOn()) || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
     try {
-      var u = new SpeechSynthesisUtterance(text), vs = window.speechSynthesis.getVoices(), v = null, i;
-      for (i = 0; i < vs.length && !v; i++) if (/^en-GB/i.test(vs[i].lang) && /female|serena|kate|libby|sonia/i.test(vs[i].name)) v = vs[i];
-      for (i = 0; i < vs.length && !v; i++) if (/^en/i.test(vs[i].lang)) v = vs[i];
-      if (v) u.voice = v; u.lang = v ? v.lang : 'en-GB'; u.rate = 0.95; u.pitch = 1;
-      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+      var st = STYLES[styleNo(style)], v = pickVoice(st), say = (st[4] || '') + text;
+      var u = new SpeechSynthesisUtterance(say);
+      if (v) u.voice = v; u.lang = v ? v.lang : st[0]; u.rate = st[2]; u.pitch = st[3]; u.volume = 1;
+      window.speechSynthesis.cancel();
+      if (st.length > 4) setTimeout(function () { window.speechSynthesis.speak(u); }, 450); else window.speechSynthesis.speak(u);
     } catch (e) {}
   }
+  function showVoiceNames() {
+    document.querySelectorAll('[data-voice-name]').forEach(function (el) { var v = pickVoice(STYLES[el.getAttribute('data-voice-name')]); el.textContent = v ? 'This device: ' + v.name : 'This device: default voice'; });
+  }
+  if (window.speechSynthesis) { window.speechSynthesis.onvoiceschanged = showVoiceNames; setTimeout(showVoiceNames, 300); }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-voice-test]'); if (!b) return;
+    ev.preventDefault(); unlock(); var n = parseInt(b.getAttribute('data-voice-test'), 10);
+    var r = b.closest('label') && b.closest('label').querySelector('input[type=radio]'); if (r) r.checked = true;
+    speak('New candidate entered: Ahmed Khan, applying for Driver.', true, n);
+  });
   if (window.speechSynthesis) window.speechSynthesis.getVoices();
   function toast(text, link, label, iconHtml, say) {
     var box = document.getElementById('toasts'); if (!box) return;
@@ -302,7 +330,8 @@
     if (t) {
       var inp = document.getElementById(t.getAttribute('data-say-input')); if (!inp) return;
       var sample = { name: 'Ahmed Khan', position: 'Driver', amount: 'AED 1,500.00', party: 'Ahmed Khan', type: 'enquiry', seq: '1st', response: 'Selected', ref: 'RCT-0001' };
-      speak((inp.value || inp.placeholder).replace(/\{(\w+)\}/g, function (m, k) { return sample[k] || ''; }), true);
+      var chosen = document.querySelector('input[name=voice_style]:checked');
+      speak((inp.value || inp.placeholder).replace(/\{(\w+)\}/g, function (m, k) { return sample[k] || ''; }), true, chosen ? parseInt(chosen.value, 10) : 0);
     }
   }, true);
   var sayBar = document.querySelector('.say-bar[data-autosay]');
