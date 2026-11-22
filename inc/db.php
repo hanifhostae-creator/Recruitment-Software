@@ -144,6 +144,7 @@ function core_schema()
     // columns added after v1.0 (older installs get them here)
     db_add_missing('users', ['team' => 'TEXT']);
     db_add_missing('payments', ['section' => 'TEXT']);
+    db_add_missing('staff_attendance', ['in_ip' => 'TEXT', 'out_ip' => 'TEXT']);
     db_add_missing('notifications', ['kind' => 'TEXT', 'msg_key' => 'TEXT', 'say_tail' => 'LONGTEXT']);
 }
 

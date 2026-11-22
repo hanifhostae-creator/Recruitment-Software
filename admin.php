@@ -44,6 +44,31 @@ if (is_post()) {
         flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
         redirect('admin.php?t=sounds');
     }
+    if ($t === 'office') {
+        $nets = office_networks();
+        $do = p('do');
+        if ($do === 'add') {
+            $ip = trim(p('ip')); $label = mb_substr(trim(p('label')), 0, 60);
+            if (!ip_rule_valid($ip)) flash('Enter a valid IP address (for example 203.0.113.7) or a range (for example 203.0.113.0/24).', 'bad');
+            elseif (in_array($ip, array_column($nets, 'ip'), true)) flash('This address is already in the list.', 'warn');
+            else { $nets[] = ['ip' => $ip, 'label' => $label ?: 'Office', 'by' => me()['name'], 'at' => now()]; set_setting('office_networks', json_encode($nets)); audit('office-network-add', 'settings', null, null, ['ip' => $ip, 'label' => $label]); flash('Office network added: ' . e($label ?: $ip) . '.'); }
+        } elseif ($do === 'remove') {
+            $ip = p('ip'); $left = array_values(array_filter($nets, function ($n) use ($ip) { return $n['ip'] !== $ip; }));
+            set_setting('office_networks', json_encode($left)); audit('office-network-remove', 'settings', null, ['ip' => $ip], null);
+            if (!$left && setting('office_lock') === '1') { set_setting('office_lock', '0'); flash('Network removed. The list is empty, so the office Wi-Fi rule was switched off.', 'warn'); } else flash('Network removed.');
+        } elseif ($do === 'lock') {
+            $on = p('on') === '1';
+            if ($on && !$nets) flash('Add the office network first, then switch the rule on.', 'bad');
+            else { set_setting('office_lock', $on ? '1' : '0'); audit('office-lock', 'settings', null, null, ['on' => $on]); flash($on ? 'Done. Staff can now check in and out only on the office Wi-Fi.' : 'The office Wi-Fi rule is off. Staff can check in from anywhere.'); }
+        } elseif ($do === 'anywhere') {
+            $ids = array_values(array_unique(array_map('intval', (array)($_POST['uid'] ?? []))));
+            set_setting('office_anywhere', json_encode($ids)); audit('office-anywhere', 'settings', null, null, ['users' => $ids]); flash('Saved.');
+        } elseif ($do === 'header') {
+            $h = p('ip_header'); if (!in_array($h, ['', 'HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'], true)) $h = '';
+            set_setting('ip_header', $h); audit('ip-header', 'settings', null, null, ['header' => $h]); flash('Saved.');
+        }
+        redirect('admin.php?t=office');
+    }
     if ($t === 'chat') {
         if (p('revoke')) { q('UPDATE chat_access SET archived=1, updated_at=? WHERE id=?', [now(), (int)p('revoke')]); audit('chat-access-revoke', 'chat_access', (int)p('revoke')); flash('Chat access removed.'); }
         elseif ((int)p('user_id')) {
@@ -63,9 +88,10 @@ if (is_post()) {
 
 page_start('Admin Control Centre', 'admin');
 page_head('Admin Control Centre', 'settings', 'Configure lists, custom fields, archive and restore, roles, settings and backups — no developer needed.');
-$tabs = ['options' => 'Custom options', 'fields' => 'Custom fields', 'archive' => 'Archive & restore', 'chat' => 'Chat access', 'sounds' => 'Notification sounds', 'roles' => 'Roles & permissions', 'settings' => 'System settings', 'backup' => 'Backup & health'];
-echo '<nav class="tabs">';
-foreach ($tabs as $k => $l) echo '<a class="' . ($k === $t ? 'on' : '') . '" href="' . ($k === 'roles' ? 'staff.php?t=roles' : ($k === 'settings' ? 'settings.php' : '?t=' . $k)) . '">' . e($l) . '</a>';
+$tabs = ['options' => 'Custom options', 'office' => 'Office network', 'fields' => 'Custom fields', 'archive' => 'Archive & restore', 'chat' => 'Chat access', 'sounds' => 'Notification sounds', 'roles' => 'Roles & permissions', 'settings' => 'System settings', 'backup' => 'Backup & health'];
+$tabIcons = ['options' => 'list', 'office' => 'wifi', 'fields' => 'edit', 'archive' => 'archive', 'chat' => 'lock', 'sounds' => 'volume', 'roles' => 'shield', 'settings' => 'settings', 'backup' => 'download'];
+echo '<nav class="tabs pro">';
+foreach ($tabs as $k => $l) echo '<a class="' . ($k === $t ? 'on' : '') . '" href="' . ($k === 'roles' ? 'staff.php?t=roles' : ($k === 'settings' ? 'settings.php' : '?t=' . $k)) . '">' . icon($tabIcons[$k] ?? 'grid', 16) . '<span>' . e($l) . '</span></a>';
 echo '</nav>';
 
 if ($t === 'options') {
@@ -134,6 +160,34 @@ if ($t === 'sounds') {
             . '<td><button type="button" class="btn ghost sm" data-say-input="vm_' . $k . '" data-clip-src="' . (is_file(ROOT . '/assets/voice/' . $k . '.mp3') ? 'assets/voice/' . $k . '.mp3' : '') . '" data-tail-tpl="' . e(VOICE_TAILS[$k] ?? '') . '">' . icon('volume', 14) . ' Listen</button></td></tr>';
     }
     echo '</tbody></table></div><div class="form-actions" style="padding:0 18px 16px"><button class="btn">' . icon('check', 15) . ' Save alert settings</button></div></form>';
+}
+if ($t === 'office') {
+    $nets = office_networks(); $on = office_lock_on(); $ip = client_ip(); $here = office_network_name($ip);
+    echo '<div class="office-hero card ' . ($on ? 'on' : 'off') . '"><div class="oh-ico">' . icon('wifi', 30) . '</div><div class="oh-t"><small>Check-in / check-out rule</small><h2>' . ($on ? 'Office Wi-Fi only' : 'Allowed from anywhere') . '</h2><p class="muted">'
+        . ($on ? 'Staff can check in and check out only when connected to one of the office networks below. Everything else in the system works from anywhere as normal.' : 'Switch this on to allow check-in and check-out only from the office Wi-Fi. Everything else keeps working from anywhere.') . '</p></div>'
+        . '<form method="post" action="?t=office" data-confirm="' . ($on ? 'Allow check-in from anywhere again?' : 'Allow check-in only on the office Wi-Fi?') . '">' . csrf_field() . '<input type="hidden" name="do" value="lock"><input type="hidden" name="on" value="' . ($on ? '0' : '1') . '"><button class="btn big ' . ($on ? 'ghost' : '') . '"' . (!$nets && !$on ? ' disabled title="Add the office network first"' : '') . '>' . icon($on ? 'x' : 'lock', 16) . ' ' . ($on ? 'Switch off' : 'Switch on') . '</button></form></div>';
+    echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>' . icon('monitor', 17) . ' This computer right now</h3></div><div class="kv"><div class="hl"><span>Your internet address (IP)</span><b class="ref">' . e($ip ?: 'unknown') . '</b></div><div class="' . ($here ? 'good' : '') . '"><span>Office network?</span><b>' . ($here ? 'Yes · ' . e($here) : 'No') . '</b></div></div>';
+    if (!$here && $ip) echo '<form method="post" action="?t=office" class="print-row">' . csrf_field() . '<input type="hidden" name="do" value="add"><input type="hidden" name="ip" value="' . e($ip) . '"><div class="fld" style="flex:2"><label>Name for this network</label><input name="label" maxlength="60" placeholder="For example: Main office Wi-Fi" required></div><button class="btn">' . icon('plus', 15) . ' Add this network</button></form>';
+    echo '<p class="muted small" style="margin-top:12px">' . icon('help', 13) . ' Easiest way: open this page on a computer or phone that is connected to the office Wi-Fi, then press <b>Add this network</b>. The office internet address is saved automatically.</p></div>';
+    echo '<div class="card"><div class="card-h"><h3>' . icon('plus', 17) . ' Add an address by hand</h3></div><form method="post" action="?t=office">' . csrf_field() . '<input type="hidden" name="do" value="add"><div class="grid-form"><div class="fld"><label>Name *</label><input name="label" maxlength="60" required placeholder="Branch office"></div><div class="fld"><label>IP address or range *</label><input name="ip" required placeholder="203.0.113.7 or 203.0.113.0/24"></div></div><div class="form-actions"><button class="btn">' . icon('plus', 15) . ' Add</button></div></form>'
+        . '<p class="muted small">Use the office\'s public internet address (the one shown above when you are in the office). A range such as /24 covers a block of addresses, useful if the internet company changes the last number.</p></div></div>';
+    $rows = [];
+    foreach ($nets as $n) $rows[] = ['<b>' . e($n['label']) . '</b>' . (ip_match($ip, $n['ip']) ? ' ' . badge('You are here') : ''), '<span class="ref">' . e($n['ip']) . '</span>', '<small class="muted">' . e(($n['by'] ?? '') . ' · ' . dtfmt($n['at'] ?? '')) . '</small>',
+        '<form method="post" action="?t=office" data-confirm="Remove ' . e($n['label']) . '? Staff on that network will no longer be able to check in (when the rule is on).">' . csrf_field() . '<input type="hidden" name="do" value="remove"><input type="hidden" name="ip" value="' . e($n['ip']) . '"><button class="btn ghost sm danger">' . icon('trash', 13) . ' Remove</button></form>'];
+    card_open(icon('wifi', 17) . ' Office networks <span class="count">' . count($nets) . '</span>', '<span class="muted small">Change them any time, for example after moving office or changing the internet company.</span>');
+    echo simple_table(['Name', 'Address / range', 'Added', ''], $rows, 'No office network yet. Add one above.');
+    card_close();
+    $any = office_anywhere_users();
+    echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>' . icon('users', 17) . ' Staff who may check in from anywhere</h3></div><p class="muted small">For field staff, drivers or people working outside. Everyone else follows the office Wi-Fi rule.</p><form method="post" action="?t=office">' . csrf_field() . '<input type="hidden" name="do" value="anywhere"><div class="check-grid">';
+    foreach (attendance_users() as $s) echo '<label class="check"><input type="checkbox" name="uid[]" value="' . $s['id'] . '"' . (in_array((int)$s['id'], $any, true) ? ' checked' : '') . '> ' . e($s['name']) . '</label>';
+    echo '</div><div class="form-actions"><button class="btn">' . icon('check', 15) . ' Save</button></div></form></div>';
+    $blocked = rows("SELECT * FROM audit WHERE action='attendance-blocked' ORDER BY id DESC LIMIT 15");
+    echo '<div class="card"><div class="card-h"><h3>' . icon('shield', 17) . ' Blocked attempts (outside the office)</h3></div>' . simple_table(['When', 'Staff', 'Address'], array_map(function ($b) { $v = json_decode((string)$b['new_v'], true) ?: []; return [e(dtfmt($b['at'])), e($b['actor']) . ' <small class="muted">' . e(($v['action'] ?? '') === 'out' ? 'check-out' : 'check-in') . '</small>', '<span class="ref">' . e($v['ip'] ?? $b['ip']) . '</span>']; }, $blocked), 'No blocked attempts.') . '</div></div>';
+    $hdr = setting('ip_header', '');
+    echo '<details class="card"><summary><b>' . icon('settings', 15) . ' Advanced: address detection</b> <span class="muted small">(only if the address above looks wrong)</span></summary><p class="muted small">Normally leave this on "Standard". If the website uses a protection/CDN service (for example Cloudflare), every visitor seems to come from the same address; then choose the header below that shows <i>your</i> real address.</p><form method="post" action="?t=office">' . csrf_field() . '<input type="hidden" name="do" value="header"><div class="check-grid">';
+    foreach (['' => ['Standard (recommended)', $_SERVER['REMOTE_ADDR'] ?? ''], 'HTTP_CF_CONNECTING_IP' => ['Cloudflare', $_SERVER['HTTP_CF_CONNECTING_IP'] ?? ''], 'HTTP_X_FORWARDED_FOR' => ['X-Forwarded-For', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''], 'HTTP_X_REAL_IP' => ['X-Real-IP', $_SERVER['HTTP_X_REAL_IP'] ?? '']] as $k => $v)
+        echo '<label class="check"><input type="radio" name="ip_header" value="' . $k . '"' . ($hdr === $k ? ' checked' : '') . '> ' . e($v[0]) . ' — <span class="ref">' . e($v[1] ?: 'not sent') . '</span></label>';
+    echo '</div><div class="form-actions"><button class="btn ghost">Save</button></div></form></details>';
 }
 if ($t === 'chat') {
     echo '<div class="alert info">' . icon('lock', 15) . ' Candidate chats are private. Only the assigned deployment officer and team can read them. You (Super Admin) can read any chat, and every view by someone other than the deployment team is written to the audit log. Give another staff member access below.</div><div class="grid g2">';

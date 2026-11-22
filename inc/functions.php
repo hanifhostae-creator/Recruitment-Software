@@ -90,7 +90,7 @@ function audit($action, $tbl = null, $id = null, $old = null, $new = null, $reas
         'actor_id' => $u ? $u['id'] : ($_SESSION['portal']['id'] ?? null), 'action' => $action, 'tbl' => $tbl, 'rec_id' => $id,
         'old_v' => $old === null ? null : (is_string($old) ? $old : json_encode($old, JSON_UNESCAPED_UNICODE)),
         'new_v' => $new === null ? null : (is_string($new) ? $new : json_encode($new, JSON_UNESCAPED_UNICODE)),
-        'reason' => $reason, 'ip' => $_SERVER['REMOTE_ADDR'] ?? 'cli',
+        'reason' => $reason, 'ip' => PHP_SAPI === 'cli' ? 'cli' : client_ip(),
     ]);
 }
 
@@ -446,6 +446,60 @@ function attendance_users() { return rows(ATT_STAFF); }
 function attendance_staff_count() { return (int)val("SELECT COUNT(*) FROM users u WHERE u.active=1 AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1)"); }
 function attendance_present_count($day) { return (int)val("SELECT COUNT(*) FROM staff_attendance a JOIN users u ON u.id=a.user_id WHERE a.day=? AND u.role_id NOT IN (SELECT id FROM roles WHERE is_super=1)", [$day]); }
 function attendance_today($uid) { return row('SELECT * FROM staff_attendance WHERE user_id=? AND day=?', [$uid, today()]); }
+// ---- office network: check-in / check-out only from the office Wi-Fi (Admin → Office network)
+/** The visitor's IP address (or the proxy header the Super Admin chose, when the site sits behind a CDN). */
+function client_ip()
+{
+    $h = (string)setting('ip_header', '');
+    if (in_array($h, ['HTTP_CF_CONNECTING_IP', 'HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP'], true) && !empty($_SERVER[$h])) {
+        $v = trim(explode(',', (string)$_SERVER[$h])[0]);
+        if (filter_var($v, FILTER_VALIDATE_IP)) return ip_norm($v);
+    }
+    return ip_norm((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+}
+function ip_norm($ip) { return stripos($ip, '::ffff:') === 0 && strpos($ip, '.') !== false ? substr($ip, 7) : $ip; }
+/** A single address (203.0.113.7) or a range in CIDR form (203.0.113.0/24, 2001:db8:1::/48). */
+function ip_rule_valid($rule)
+{
+    $rule = trim($rule);
+    if (strpos($rule, '/') === false) return (bool)filter_var($rule, FILTER_VALIDATE_IP);
+    list($net, $bits) = explode('/', $rule, 2);
+    if (!filter_var($net, FILTER_VALIDATE_IP) || !ctype_digit($bits)) return false;
+    return (int)$bits <= (strpos($net, ':') !== false ? 128 : 32);
+}
+function ip_match($ip, $rule)
+{
+    $rule = trim($rule);
+    $a = @inet_pton(ip_norm($ip));
+    if ($a === false || $rule === '' || !ip_rule_valid($rule)) return false;
+    if (strpos($rule, '/') === false) return $a === @inet_pton($rule);
+    list($net, $bits) = explode('/', $rule, 2);
+    $b = @inet_pton($net);
+    if ($b === false || strlen($a) !== strlen($b)) return false;
+    $bits = (int)$bits; $full = intdiv($bits, 8); $rem = $bits % 8;
+    if (substr($a, 0, $full) !== substr($b, 0, $full)) return false;
+    if (!$rem) return true;
+    $m = (0xFF << (8 - $rem)) & 0xFF;
+    return (ord($a[$full]) & $m) === (ord($b[$full]) & $m);
+}
+function office_networks() { return json_decode((string)setting('office_networks', ''), true) ?: []; }
+function office_lock_on() { return setting('office_lock', '0') === '1' && office_networks(); }
+function office_anywhere_users() { return array_map('intval', json_decode((string)setting('office_anywhere', ''), true) ?: []); }
+/** Name of the office network the visitor is on, or null. */
+function office_network_name($ip = null)
+{
+    $ip = $ip ?? client_ip();
+    foreach (office_networks() as $n) if (ip_match($ip, $n['ip'])) return $n['label'] ?: $n['ip'];
+    return null;
+}
+/** May this user check in / out right now? (Always yes when the office lock is off or the user may check in from anywhere.) */
+function att_allowed($uid = null)
+{
+    if (!office_lock_on()) return true;
+    if (in_array((int)($uid ?? (me()['id'] ?? 0)), office_anywhere_users(), true)) return true;
+    return office_network_name() !== null;
+}
+const ATT_LOCK_MSG = 'Check-in and check-out work only on the office Wi-Fi. Please connect to the office network and try again.';
 /** Handles the check-in box and the Reception manual box (posted with _att). */
 function attendance_handle()
 {
@@ -455,14 +509,19 @@ function attendance_handle()
     if ((int)val('SELECT r.is_super FROM users x JOIN roles r ON r.id=x.role_id WHERE x.id=?', [$target]) === 1) { flash('The Super Admin does not check in or out.', 'warn'); back(); }
     if ($target !== (int)$u['id'] && !can('reception', 'edit') && !can('hrm', 'edit')) { flash('You cannot mark attendance for other staff.', 'bad'); back(); }
     $a = p('_att');
+    if (!att_allowed((int)$u['id'])) {
+        audit('attendance-blocked', 'staff_attendance', $target, null, ['ip' => client_ip(), 'action' => $a, 'by' => $u['id']]);
+        flash(ATT_LOCK_MSG, 'bad');
+        back();
+    }
     $rec = attendance_today($target);
     if ($a === 'in') {
         if ($rec) flash('Already checked in today at ' . substr($rec['check_in'], 11, 5) . '.', 'warn');
-        else { ins('staff_attendance', ['user_id' => $target, 'day' => today(), 'check_in' => now(), 'marked_by' => $u['id']]); audit('check-in', 'staff_attendance', $target); flash(($target === (int)$u['id'] ? 'Checked in' : user_name($target) . ' checked in') . ' at ' . date('H:i') . '.'); }
+        else { ins('staff_attendance', ['user_id' => $target, 'day' => today(), 'check_in' => now(), 'marked_by' => $u['id'], 'in_ip' => client_ip()]); audit('check-in', 'staff_attendance', $target); flash(($target === (int)$u['id'] ? 'Checked in' : user_name($target) . ' checked in') . ' at ' . date('H:i') . '.'); }
     } elseif ($a === 'out') {
         if (!$rec) flash('Check in first.', 'warn');
         elseif ($rec['check_out']) flash('Already checked out today.', 'warn');
-        else { q('UPDATE staff_attendance SET check_out=? WHERE id=?', [now(), $rec['id']]); audit('check-out', 'staff_attendance', $target); flash('Checked out at ' . date('H:i') . '.'); }
+        else { q('UPDATE staff_attendance SET check_out=?, out_ip=? WHERE id=?', [now(), client_ip(), $rec['id']]); audit('check-out', 'staff_attendance', $target); flash('Checked out at ' . date('H:i') . '.'); }
     }
     back();
 }

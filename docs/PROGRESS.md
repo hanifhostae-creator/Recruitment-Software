@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.7.0 (22 Nov 2026)
+## Current version: 1.8.0 (22 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -140,6 +140,14 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
     Saved as webm / ogg / m4a (`CHAT_TYPES`, content checked), played with an audio player in the chat. Permissions-Policy
     now allows microphone=(self). Attach (PDF/photo), camera and location were already there.
 
+- **v1.8** (22 Nov): **Check-in / check-out only on the office Wi-Fi** — Admin → Office network (`admin.php?t=office`).
+  Switch on/off (cannot switch on with an empty list; removing the last network switches it off), office networks as single IPs
+  or CIDR ranges, IPv4 and IPv6 (`ip_match()`, `ip_rule_valid()`), "Add this network" saves the address of the computer the admin
+  is using, staff who may check in from anywhere, blocked attempts list (audit action `attendance-blocked` with the address),
+  advanced proxy-header choice (`setting ip_header`) for sites behind a CDN. Only self check-in/out and the Reception manual box are
+  limited (the person pressing must be on the office network); all other work is unchanged. Addresses saved on each attendance
+  row (`staff_attendance.in_ip` / `out_ip`); audit rows now use `client_ip()`.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -149,6 +157,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-22 · v1.8.0 · Office Wi-Fi rule for check-in/check-out with admin settings, exceptions and blocked-attempt log.
 - 2026-11-22 · v1.7.0 · Premium layout (3D cards, pill tabs, sidebar, top bar), live bell menu, voice messages in chat.
 - 2026-11-16 · v1.6.1 · Recorded voice switched on for existing installs (an earlier saved device-voice choice was overriding it); alerts without their own recording start with the recorded "You have a new notification"; Print history "Printed by" column fixed.
 - 2026-11-16 · v1.6.0 · Recorded professional voice for all alerts (owner's choice No. 1); Printable Forms with running serial numbers and print history.

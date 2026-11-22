@@ -28,6 +28,9 @@ function icon($name, $size = 18)
         'bell' => '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
         'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+        'list' => '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
+        'flag' => '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+        'wifi' => '<path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1.2"/>',
         'mic' => '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>',
         'paperclip' => '<path d="m21 11-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4L15.8 7"/>',
         'camera' => '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
@@ -126,7 +129,9 @@ function page_start($title, $active = null, $showFlash = true)
     if ($u) {
         if (!is_super()) {
         echo '<form method="post" class="att-mini">' . csrf_field();
-        if (!$att) echo '<button class="btn sm" name="_att" value="in">' . icon('login', 15) . '<span> Check in</span></button>';
+        $okNet = att_allowed();
+        if (!$okNet && (!$att || !$att['check_out'])) echo '<span class="att-lock" title="' . e(ATT_LOCK_MSG) . '">' . icon('lock', 14) . '<span> Office Wi-Fi only</span></span>';
+        elseif (!$att) echo '<button class="btn sm" name="_att" value="in">' . icon('login', 15) . '<span> Check in</span></button>';
         elseif (!$att['check_out']) echo '<span class="att-on" title="Checked in at ' . e(substr($att['check_in'], 11, 5)) . '"><i></i>' . e(substr($att['check_in'], 11, 5)) . '</span><button class="btn ghost sm" name="_att" value="out">' . icon('logout', 15) . '<span> Check out</span></button>';
         else echo '<span class="att-done">' . icon('check-circle', 15) . ' ' . e(substr($att['check_in'], 11, 5)) . '–' . e(substr($att['check_out'], 11, 5)) . '</span>';
         echo '</form>';
@@ -212,10 +217,12 @@ function attendance_box()
     $u = me();
     $a = attendance_today($u['id']);
     echo '<div class="card att-box"><div class="card-h"><h3>' . icon('clock', 17) . ' My attendance · ' . date('D d M') . '</h3></div><form method="post" class="att-row">' . csrf_field();
-    if (!$a) echo '<p>You have not checked in today.</p><button class="btn" name="_att" value="in">' . icon('login', 16) . ' Check in</button>';
+    $okNet = att_allowed();
+    if (office_lock_on()) echo '<p class="small ' . ($okNet ? 'net-ok' : 'net-bad') . '">' . icon($okNet ? 'check-circle' : 'lock', 14) . ' ' . ($okNet ? 'Connected to the office network' . (($nn = office_network_name()) ? ' (' . e($nn) . ')' : '') . '.' : 'You are not on the office Wi-Fi. Check-in and check-out work only there.') . '</p>';
+    if (!$a) echo '<p>You have not checked in today.</p>' . ($okNet ? '<button class="btn" name="_att" value="in">' . icon('login', 16) . ' Check in</button>' : '<button class="btn" type="button" disabled>' . icon('lock', 16) . ' Check in</button>');
     else {
         echo '<p>Checked in <b>' . e(substr($a['check_in'], 11, 5)) . '</b>' . ($a['check_out'] ? ' · checked out <b>' . e(substr($a['check_out'], 11, 5)) . '</b>' : '') . '</p>';
-        if (!$a['check_out']) echo '<button class="btn ghost" name="_att" value="out">' . icon('logout', 16) . ' Check out</button>';
+        if (!$a['check_out']) echo $okNet ? '<button class="btn ghost" name="_att" value="out">' . icon('logout', 16) . ' Check out</button>' : '<button class="btn ghost" type="button" disabled>' . icon('lock', 16) . ' Check out</button>';
     }
     echo '</form></div>';
 }
