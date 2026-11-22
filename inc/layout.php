@@ -108,7 +108,7 @@ function page_start($title, $active = null, $showFlash = true)
     $u = me();
     html_head($title);
     $since = $u ? (int)val('SELECT COALESCE(MAX(id),0) FROM notifications WHERE user_id=?', [$u['id']]) : 0;
-    echo '<body class="app" data-voice="' . voice_style() . '"' . ($u ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><a class="skip" href="#main">Skip to content</a><div class="shell">';
+    echo '<body class="app" data-v="' . APP_VERSION . '" data-voice="' . voice_style() . '"' . ($u ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><a class="skip" href="#main">Skip to content</a><div class="shell">';
     // sidebar
     echo '<aside class="side" id="side"><a class="brand" href="index.php"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>Business Management System</small></span></a><nav class="nav">';
     $by = [];
@@ -171,7 +171,7 @@ function portal_start($title, $portalName, array $nav = [], $active = '', $logou
     html_head($title);
     $poll = !empty($_SESSION['portal']) && $_SESSION['portal']['type'] === 'candidate';
     $since = $poll ? (int)val("SELECT COALESCE(MAX(id),0) FROM chat_messages WHERE candidate_id=? AND sender_type='Staff'", [$_SESSION['portal']['id']]) : 0;
-    echo '<body class="portal' . ($nav && is_array(reset($nav)) ? ' p-app' : '') . '" data-voice="' . voice_style() . '"' . ($poll ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><header class="p-top"><a class="brand" href="?"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>' . e($portalName) . '</small></span></a>';
+    echo '<body data-v="' . APP_VERSION . '" class="portal' . ($nav && is_array(reset($nav)) ? ' p-app' : '') . '" data-voice="' . voice_style() . '"' . ($poll ? ' data-poll="poll.php" data-since="' . $since . '"' : '') . '><header class="p-top"><a class="brand" href="?"><img src="assets/img/rh-mark.png" alt=""><span><b>RH Management</b><small>' . e($portalName) . '</small></span></a>';
     if ($nav) {
         echo '<nav class="p-nav">';
         foreach ($nav as $k => $l) {

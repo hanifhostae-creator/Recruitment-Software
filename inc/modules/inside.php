@@ -8,6 +8,7 @@ opt_defaults('assessment_types', ['Trade Test', 'Driving Test', 'English Test', 
 ent('candidates', ['notify_new' => [null], 'label' => 'Candidates', 'prefix' => 'CAN', 'title' => 'full_name', 'icon' => 'user', 'log_view' => true,
     'dupe' => ['phone', 'email', 'passport_no'],
     'fields' => [
+        'cv_file' => ['CV (optional)', 'file', 'dir' => 'cv', 'camera', 'cvread' => true],
         'full_name' => ['Full name', 'text', 'req'],
         'phone' => ['Phone', 'phone', 'req'],
         'email' => ['Email (portal username)', 'email'],
@@ -26,7 +27,6 @@ ent('candidates', ['notify_new' => [null], 'label' => 'Candidates', 'prefix' => 
         'experience' => ['Experience', 'textarea', 'more'],
         'skills' => ['Skills', 'textarea', 'more'],
         'preferred_positions' => ['Preferred positions', 'text', 'more'],
-        'cv_file' => ['CV (optional)', 'file', 'dir' => 'cv', 'camera', 'help' => 'Upload a file, or press "Take photo" to photograph a paper CV (several pages are joined).'],
         'hr_officer' => ['Assign to HR (optional)', 'user', 'role' => 'HR', 'help' => 'Choosing an HR officer moves the candidate to HR Assigned and rings a notification on their screen.'],
         'stage' => ['Stage', 'enum:' . implode('|', CAND_STAGES), 'hide'],
         'interview_status' => ['Interview status', 'enum:Pending|Selected|Rejected|On Hold', 'hide'],
@@ -773,6 +773,46 @@ function candidate_welcome_email($cid, $link)
     $ok = send_email($c['email'], 'Your RH Management candidate portal is ready', $body, 'Candidate registration link', ['button' => ['Activate my portal', $link], 'sensitive' => true]);
     return $ok ? 'The registration email was sent to ' . e($c['email']) . '.' : 'The email to ' . e($c['email']) . ' could not be sent (' . e($GLOBALS['mail_error'] ?? 'unknown error') . '); share the link below with the candidate.';
 }
+/** "Today's work" tiles on the staff home page: Reception, HR and Deployment see only their own next steps. */
+function staff_work_panel()
+{
+    if (is_super()) return;
+    $uid = (int)me()['id']; $t = [];
+    $tile = function ($label, $count, $hint, $iconName, $tone, $href, $action = false) { return ['label' => $label, 'n' => $count, 'hint' => $hint, 'icon' => $iconName, 'tone' => $tone, 'href' => $href, 'action' => $action]; };
+    if (can('reception')) {
+        if (can('candidates', 'add')) $t[] = $tile('Add new candidate', null, 'Upload or scan the CV — the form fills itself', 'user-plus', 'blue', 'candidates.php?t=all&a=new', true);
+        $t[] = $tile('Waiting for an HR officer', (int)val("SELECT COUNT(*) FROM candidates WHERE stage='New' AND archived=0"), 'Choose the HR officer for each one', 'clock', 'amber', 'reception.php');
+        $t[] = $tile('Ready for deployment', (int)val("SELECT COUNT(*) FROM candidates WHERE stage='File Opened' AND archived=0"), 'HR finished the file — assign the team', 'send', 'green', 'reception.php?t=ready');
+        $t[] = $tile('Registered online today', (int)val("SELECT COUNT(*) FROM candidates WHERE source='Website' AND date(created_at)=? AND archived=0", [today()]), 'From the registration link', 'link', 'violet', 'reception.php');
+    } elseif (can('candidates', 'approve')) {
+        $t[] = $tile('To interview', (int)val("SELECT COUNT(*) FROM candidates WHERE stage IN ('New','HR Assigned') AND hr_officer=? AND archived=0", [$uid]), 'Open a candidate, see the CV, press File done', 'clipboard', 'amber', 'candidates.php?t=all&stage=HR+Assigned&hr_officer=' . $uid);
+        $t[] = $tile('Interviewed, file not done', (int)val("SELECT COUNT(*) FROM candidates c WHERE c.stage='Interviewed' AND c.hr_officer=? AND c.archived=0 AND c.file_decision IS NULL", [$uid]), 'Finish the payment box', 'folder', 'blue', 'candidates.php?t=all&stage=Interviewed&hr_officer=' . $uid);
+        $t[] = $tile('Files done this month', (int)val("SELECT COUNT(*) FROM inside_files WHERE hr_owner=? AND created_at>=? AND archived=0", [$uid, date('Y-m-01')]), 'Your progress', 'award', 'green', 'inside.php');
+        if (can('candidates', 'add')) $t[] = $tile('Add new candidate', null, 'Upload or scan the CV', 'user-plus', 'violet', 'candidates.php?t=all&a=new', true);
+    }
+    if (can('deployment')) {
+        list($w, $p) = function_exists('chat_scope') ? chat_scope(true) : ['1=0', []];
+        $t[] = $tile('My candidates', (int)val("SELECT COUNT(*) FROM candidates c WHERE c.archived=0 AND c.stage IN ('In Deployment','Selected') AND $w", $p), 'Chat, send interview locations, record the result', 'users', 'blue', 'deployment.php');
+        $t[] = $tile('Unread messages', function_exists('chat_unread_total') ? chat_unread_total() : 0, 'Reply to your candidates', 'chat', 'violet', 'chat.php');
+        $t[] = $tile('Interviews waiting for a reply', (int)val("SELECT COUNT(*) FROM interview_locations l JOIN candidates c ON c.id=l.candidate_id WHERE l.response='Pending' AND l.archived=0 AND $w", $p), 'The candidate has not answered yet', 'map-pin', 'amber', 'deployment.php?t=locations');
+        $t[] = $tile('Selected this month', (int)val("SELECT COUNT(*) FROM stage_history h JOIN candidates c ON c.id=h.entity_id WHERE h.entity='candidates' AND h.to_stage='Selected' AND h.at>=? AND $w", array_merge([date('Y-m-01')], $p)), 'Well done', 'award', 'green', 'deployment.php?t=pipeline');
+    }
+    if (!$t) return;
+    echo '<div class="work-head"><h3>' . icon('zap', 17) . ' Your work today</h3><span class="muted small">Press a box to start</span></div><div class="work-tiles">';
+    foreach ($t as $i => $x) echo '<a class="wtile t-' . e($x['tone']) . ($x['action'] ? ' act' : '') . ($x['n'] ? ' has' : '') . '" style="--d:' . ($i * 60) . 'ms" href="' . e($x['href']) . '"><span class="wt-ico">' . icon($x['icon'], 24) . '</span><span class="wt-b">'
+        . ($x['n'] !== null ? '<b class="wt-n">' . (int)$x['n'] . '</b>' : '') . '<span class="wt-l">' . e($x['label']) . '</span><small>' . e($x['hint']) . '</small></span><span class="wt-go">' . icon('arrow-right', 18) . '</span></a>';
+    echo '</div>';
+}
+/** Link candidates use to register themselves (sent with the interview invitation). */
+function reglink_card()
+{
+    $link = app_url() . 'candidate_register.php';
+    $msg = "Dear candidate,\nThank you for your interest in working with RH Business Solutions & Marketing Management, Dubai. Please register before your interview using this link:\n" . $link . "\nPlease bring your passport and CV when you come.";
+    $online = (int)val("SELECT COUNT(*) FROM candidates WHERE archived=0 AND stage='New' AND source='Website'");
+    return '<div class="card reglink"><div class="rl-ico">' . icon('link', 22) . '</div><div class="rl-t"><b>Online registration link</b><small>Send it with the interview invitation. The candidate fills in the details (the CV can fill the form) and appears below in the HR-assign queue' . ($online ? ' · <b>' . $online . ' new online</b>' : '') . '.</small>'
+        . '<div class="copybox"><input id="reglink-url" readonly value="' . e($link) . '"><button type="button" class="btn ghost sm" data-copy="reglink-url">' . icon('copy', 14) . ' Copy link</button>'
+        . '<a class="btn wa sm" target="_blank" rel="noopener" href="https://wa.me/?text=' . e(rawurlencode($msg)) . '">' . icon('whatsapp', 14) . ' Send by WhatsApp</a><a class="btn ghost sm" target="_blank" rel="noopener" href="candidate_register.php">' . icon('eye', 14) . ' Open form</a></div></div></div>';
+}
 /** Reception queue with an inline "assign" form on each row (HR officer, or Deployment team / officer). */
 function reception_assign_table(array $list, $kind, $empty)
 {
@@ -801,7 +841,7 @@ function reception_assign_table(array $list, $kind, $empty)
             }
             $form .= '<button class="btn sm">' . icon('send', 13) . ' Assign</button></form>';
         }
-        $data[] = ['<b class="ref">' . e($c['ref_no']) . '</b>', '<b>' . e($c['full_name']) . '</b><br><small class="muted">' . e($c['phone']) . ' · ' . e($c['applied_position']) . '</small>', badge($c['interview_status'] ?: 'Not interviewed'),
+        $data[] = ['<b class="ref">' . e($c['ref_no']) . '</b>', '<b>' . e($c['full_name']) . '</b>' . ($c['source'] === 'Website' ? ' <span class="badge b-info">Online</span>' : '') . '<br><small class="muted">' . e($c['phone']) . ' · ' . e($c['applied_position']) . '</small>', badge($c['interview_status'] ?: 'Not interviewed'),
             $f ? '<small class="ref">' . e($f['ref_no']) . '</small>' : '<span class="muted">No file</span>', '<span class="num">' . money($m['paid']) . '</span>', '<span class="num"' . ($m['balance'] > 0 ? ' style="color:var(--bad);font-weight:700"' : '') . '>' . money(max(0, $m['balance'])) . '</span>', $m['next'] ? e(dfmt($m['next'])) : '<span class="muted">—</span>', $form];
         $links[] = ent_url('candidates', $c['id']);
     }
@@ -814,6 +854,7 @@ mod('reception', ['label' => 'Reception', 'icon' => 'home', 'area' => 'Inside Hi
     'tabs' => ['today' => ['label' => 'Queues', 'fn' => function ($base, $mod) {
         echo '<div class="ph-r" style="margin-bottom:14px">' . (can('candidates', 'add') ? '<a class="btn" href="candidates.php?a=new">' . icon('user-plus', 16) . ' Add New candidate</a>' : '') . ' <a class="btn ghost" href="candidates.php">All candidates</a></div>';
         render_widgets(['reception']);
+        echo reglink_card();
         echo '<div class="grid g2"><div class="span2">';
         card_open(icon('calendar', 17) . ' Today\'s entries');
         echo candidate_queue_table(rows("SELECT * FROM candidates WHERE archived=0 AND date(created_at)=? ORDER BY id DESC", [today()]), 'No candidates registered today.');

@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.8.1 (22 Nov 2026)
+## Current version: 1.9.0 (22 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -155,6 +155,25 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   Admin → Notification sounds → **Check this device** tests playback (ok / blocked / file missing). Office network page shows
   today's check-ins with network (office/outside + address); Reception attendance box has a Network column.
 
+- **v1.9** (22 Nov):
+  - **Check-in / check-out sound**: the button posts in the background (`X-RH-Ajax`), `attendance_handle()` answers JSON; a
+    confirmation card shows (on time / late by …, hours worked) and a chime + recorded voice plays (`assets/voice/check_in.mp3`,
+    `check_out.mp3`). Works without JavaScript too (normal post).
+  - **Staff Attendance** module (`attendance.php`, `inc/modules/attendance.php`, area People; Super Admin or roles given it):
+    Monthly overview (present/working days, absent, late days + total, left early, hours, overtime, attendance % bar, Excel/CSV),
+    Staff report (choose a name + month: every day with status Present/Late/Absent/Day off/Holiday/Not joined, in/out, hours,
+    late by, left early, overtime, network, Excel), Office hours (start/end, grace minutes, working days, public holidays;
+    setting `att_cfg`, default 09:00–18:00 Mon–Sat). Days off worked are shown separately, not as extra present days.
+  - **Collect data from the CV** (candidate form + public registration): CV field is first; upload a PDF/photo or scan with the
+    camera → the browser reads it (`assets/cvread.js`: PDF text via pdf.js, photos/scans via text recognition, all files served
+    from `assets/vendor/ocr/`, nothing sent elsewhere) and fills empty fields (highlighted green). Camera pages are saved as one PDF
+    (pdf-lib). CSP now allows 'wasm-unsafe-eval' for the reader. Word files are not read automatically.
+  - **Online registration link** (`candidate_register.php`, `?pos=Position` preselects): 4 short steps, CV optional with the reader,
+    duplicate check (phone/email/passport), rate limit per address; Reception gets a recorded-voice alert (`reception_new`) and the
+    candidate shows in the HR-assign queue with an "Online" badge. Reception page has a link card (copy / send by WhatsApp / open).
+  - **Staff home** ("Your work today" tiles): Reception, HR and Deployment see only their next steps with live counts; the
+    attendance box is on the home page.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -164,6 +183,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-22 · v1.9.0 · Check-in/out sounds, Staff Attendance reports + Excel, fill the form from the CV (upload/camera, PDF scans), online registration link, staff work tiles.
 - 2026-11-22 · v1.8.1 · Recorded voice plays reliably (no fallback to the computer voice), device check button, attendance network columns.
 - 2026-11-22 · v1.8.0 · Office Wi-Fi rule for check-in/check-out with admin settings, exceptions and blocked-attempt log.
 - 2026-11-22 · v1.7.0 · Premium layout (3D cards, pill tabs, sidebar, top bar), live bell menu, voice messages in chat.

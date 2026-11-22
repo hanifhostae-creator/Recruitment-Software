@@ -24,6 +24,8 @@ if (is_super()) {
     if (trim((string)setting('site_url', '')) === '') echo '<div class="alert warn">' . icon('alert', 15) . ' <b>Set the System URL</b> (Settings → Company), for example <code>https://crm.yourdomain.com</code>. Password reset and portal emails use it, so every link is safe and correct. <a href="settings.php">Open Settings</a></div>';
     if (trim((string)setting('smtp_host', '')) === '') echo '<div class="alert warn">' . icon('mail', 15) . ' <b>Email is not set up.</b> Password reset emails need an SMTP mailbox. Settings → Email, then press "Send a test email". <a href="settings.php">Open Settings</a></div>';
 }
+if (function_exists('staff_work_panel')) staff_work_panel();
+if (!is_super() && function_exists('attendance_box')) attendance_box();
 render_widgets();
 
 echo '<div class="grid g3">';

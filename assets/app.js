@@ -190,40 +190,88 @@
     f.addEventListener('submit', function (e) { if (!txt.value.trim() && !(file.files && file.files.length) && !(cam && cam.name)) e.preventDefault(); });
   });
 
-  // CV camera: photograph a paper CV (several pages are joined into one image)
+  // load a helper script only when it is needed
+  var scripts = {};
+  function loadScript(src) {
+    if (!scripts[src]) scripts[src] = new Promise(function (ok, fail) { var sc = document.createElement('script'); sc.src = src; sc.onload = ok; sc.onerror = fail; document.head.appendChild(sc); });
+    return scripts[src];
+  }
+  // CV camera: photograph a paper CV; the pages become one PDF. With data-cvread the form is filled from the CV.
   document.querySelectorAll('[data-cam]').forEach(function (box) {
     var input = document.getElementById(box.getAttribute('data-cam')), cam = box.querySelector('.cam-box'), video = cam.querySelector('video'),
-      strip = cam.querySelector('.cam-pages'), info = box.querySelector('[data-cam-info]'), nativeIn = box.querySelector('[data-cam-native]'), stream = null, pages = [];
+      strip = cam.querySelector('.cam-pages'), info = box.querySelector('[data-cam-info]'), nativeIn = box.querySelector('[data-cam-native]'), stream = null, pages = [],
+      read = box.hasAttribute('data-cvread'), status = box.querySelector('[data-cv-status]'), form = box.closest('form');
+    function say(msg, pct, cls) {
+      if (!status) return; status.hidden = false; status.className = 'cv-status ' + (cls || '');
+      status.innerHTML = '<span></span>' + (pct !== undefined && pct !== null ? '<i><b style="width:' + pct + '%"></b></i>' : ''); status.querySelector('span').textContent = msg;
+    }
+    function done(text) {
+      var data = window.RHCV.parse(text || '', form), n = window.RHCV.fill(form, data);
+      say(n ? 'Filled ' + n + ' field' + (n > 1 ? 's' : '') + ' from the CV (highlighted). Please check them and complete the rest.' : 'The CV was read, but no new details were found. Please type them.', null, n ? 'ok' : 'warn');
+      var first = form.querySelector('.autofilled'); if (first && first.scrollIntoView) first.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+    function fail(e) { say((e && e.message) || 'The CV could not be read. Please type the details.', null, 'bad'); }
+    function readFrom(job) {
+      if (!read || !form) return;
+      say('Reading the CV…', 5);
+      loadScript('assets/cvread.js?v=' + (document.body.getAttribute('data-v') || '1')).then(job).then(done).catch(fail);
+    }
     function stop() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } cam.hidden = true; }
-    function attach(blob, n) {
-      try {
-        var dt = new DataTransfer(); dt.items.add(new File([blob], 'cv-photo-' + Date.now() + '.jpg', { type: 'image/jpeg' })); input.files = dt.files;
-        info.innerHTML = ''; var img = document.createElement('img'); img.className = 'cam-thumb'; img.src = URL.createObjectURL(blob); info.appendChild(img);
-        info.appendChild(document.createTextNode(' Photo attached' + (n > 1 ? ' (' + n + ' pages)' : '') + ' · ' + Math.round(blob.size / 1024) + ' KB'));
-      } catch (e) { info.textContent = 'This browser cannot attach a photo here. Please use the file button.'; }
+    function show(file, n) {
+      info.innerHTML = ''; info.appendChild(document.createTextNode((/pdf/.test(file.type) ? '📄 PDF ready' : '📷 Photo attached') + (n > 1 ? ' (' + n + ' pages)' : '') + ' · ' + Math.round(file.size / 1024) + ' KB'));
+    }
+    function attachFile(file, n) {
+      try { var dt = new DataTransfer(); dt.items.add(file); input.files = dt.files; show(file, n); return true; }
+      catch (e) { info.textContent = 'This browser cannot attach the scan here. Please use the file button.'; return false; }
+    }
+    function toPdf(canvases) {
+      return loadScript('assets/vendor/pdf-lib.min.js?v=1.17.1').then(function () {
+        return PDFLib.PDFDocument.create().then(function (doc) {
+          var chain = Promise.resolve();
+          canvases.forEach(function (c) {
+            chain = chain.then(function () {
+              var jpg = c.toDataURL('image/jpeg', 0.82);
+              return doc.embedJpg(jpg).then(function (img) { var W = 595, H = Math.round(595 * c.height / c.width); doc.addPage([W, H]).drawImage(img, { x: 0, y: 0, width: W, height: H }); });
+            });
+          });
+          return chain.then(function () { return doc.save(); });
+        });
+      }).then(function (bytes) { return new File([bytes], 'cv-scan-' + Date.now() + '.pdf', { type: 'application/pdf' }); });
+    }
+    function useCanvases(canvases) {
+      var n = canvases.length; info.textContent = 'Making the PDF…';
+      toPdf(canvases).then(function (f) { attachFile(f, n); }).catch(function () {
+        info.textContent = 'Could not make a PDF; attaching a photo instead.';
+        canvases[0].toBlob(function (b) { attachFile(new File([b], 'cv-photo-' + Date.now() + '.jpg', { type: 'image/jpeg' }), 1); }, 'image/jpeg', 0.82);
+      });
+      readFrom(function () { return window.RHCV.ocr(canvases, say); });
     }
     function shot() {
       if (!video.videoWidth) return;
       var c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight; c.getContext('2d').drawImage(video, 0, 0);
       pages.push(c); var t = document.createElement('canvas'); t.width = 90; t.height = Math.round(90 * c.height / c.width); t.getContext('2d').drawImage(c, 0, 0, t.width, t.height); strip.appendChild(t);
     }
-    function join() {
-      var W = 1240, H = 0, hs = pages.map(function (c) { var h = Math.round(c.height * W / c.width); H += h; return h; });
-      var out = document.createElement('canvas'), g = out.getContext('2d'), y = 0; out.width = W; out.height = H; g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
-      pages.forEach(function (c, i) { g.drawImage(c, 0, y, W, hs[i]); y += hs[i]; }); return out;
-    }
     box.querySelector('[data-cam-open]').addEventListener('click', function () {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false }).then(function (s) {
-          stream = s; video.srcObject = s; video.play(); pages = []; strip.innerHTML = ''; cam.hidden = false;
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false }).then(function (st) {
+          stream = st; video.srcObject = st; video.play(); pages = []; strip.innerHTML = ''; cam.hidden = false;
         }).catch(function () { nativeIn.click(); });
       } else nativeIn.click();
     });
     box.querySelector('[data-cam-shot]').addEventListener('click', function () { if (pages.length < 6) shot(); });
-    box.querySelector('[data-cam-done]').addEventListener('click', function () { if (!pages.length) shot(); if (!pages.length) return; var n = pages.length; join().toBlob(function (b) { attach(b, n); }, 'image/jpeg', 0.82); stop(); });
+    box.querySelector('[data-cam-done]').addEventListener('click', function () { if (!pages.length) shot(); if (!pages.length) return; var list = pages.slice(); stop(); useCanvases(list); });
     box.querySelector('[data-cam-cancel]').addEventListener('click', stop);
-    nativeIn.addEventListener('change', function () { if (nativeIn.files[0]) attach(nativeIn.files[0], 1); });
-    input.addEventListener('change', function () { if (input.files[0]) info.textContent = input.files[0].name; });
+    nativeIn.addEventListener('change', function () {
+      var f = nativeIn.files[0]; if (!f) return;
+      var img = new Image(); img.onload = function () { var c = document.createElement('canvas'), k = Math.min(1, 2000 / img.width); c.width = img.width * k; c.height = img.height * k; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); useCanvases([c]); };
+      img.src = URL.createObjectURL(f);
+    });
+    input.addEventListener('change', function () {
+      var f = input.files[0]; if (!f) return; info.textContent = f.name;
+      if (!/^cv-scan-/.test(f.name)) readFrom(function () { return window.RHCV.readFile(f, say); });
+    });
+    var again = box.querySelector('[data-cv-read]');
+    if (again) again.addEventListener('click', function () { var f = input.files[0]; if (f) readFrom(function () { return window.RHCV.readFile(f, say); }); else info.textContent = 'Choose the CV file or take photos first.'; });
   });
 
   // print buttons (no inline handlers, allowed by the security policy)
@@ -349,6 +397,29 @@
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     playClip(clip, tail, full);
   }
+  // check-in / check-out: sent in the background so the confirmation sound plays straight away
+  function attPop(d) {
+    var el = document.createElement('div'); el.className = 'att-pop ' + (d.type || 'ok');
+    el.innerHTML = '<div class="ap-card"><div class="ap-ico">' + (d.ok ? '&#10003;' : '!') + '</div><b></b><span></span></div>';
+    el.querySelector('b').textContent = d.ok ? (/out/i.test(d.msg) && /Checked out|checked out/.test(d.msg) ? 'Checked out' : 'Checked in') : 'Not done';
+    el.querySelector('span').textContent = d.msg; document.body.appendChild(el);
+    el.addEventListener('click', function () { location.reload(); });
+  }
+  document.addEventListener('submit', function (ev) {
+    var f = ev.target, b = ev.submitter;
+    if (!b || b.name !== '_att' || !window.fetch || !window.FormData || f.getAttribute('data-confirm')) return;
+    ev.preventDefault();
+    var p = getPlayer(); try { p.src = 'assets/voice/silence.mp3'; var pr = p.play(); if (pr && pr.catch) pr.catch(function () {}); } catch (e) {}
+    var fd = new FormData(f); fd.append('_att', b.value); b.disabled = true;
+    fetch(f.action || location.href, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-RH-Ajax': '1' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        attPop(d);
+        var go = function () { location.reload(); };
+        if (d.sound) { beep(true, 'chime'); setTimeout(function () { playClip(d.sound, '', '', function () { setTimeout(go, 600); }); }, 650); setTimeout(go, 9000); }
+        else setTimeout(go, d.ok ? 1600 : 3200);
+      }).catch(function () { f.submit(); });
+  });
   // Admin → Notification sounds: "Check this device"
   document.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-voice-check]'); if (!b) return;

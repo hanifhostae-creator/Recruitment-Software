@@ -62,7 +62,7 @@ function deny($msg = 'You do not have permission to open this page.')
 /** Too many failed sign-ins from this network address in the last 15 minutes (staff and portals). */
 function too_many_attempts()
 {
-    return (int)val("SELECT COUNT(*) FROM audit WHERE action IN ('login-failed','portal-login-failed') AND ip=? AND at>=?", [$_SERVER['REMOTE_ADDR'] ?? 'cli', date('Y-m-d H:i:s', time() - 900)]) >= 10;
+    return (int)val("SELECT COUNT(*) FROM audit WHERE action IN ('login-failed','portal-login-failed') AND ip=? AND at>=?", [client_ip(), date('Y-m-d H:i:s', time() - 900)]) >= 10;
 }
 function login_attempt($username, $password)
 {

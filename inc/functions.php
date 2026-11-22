@@ -221,6 +221,7 @@ function notif_config()
 /** Spoken / written alert messages. The Super Admin edits the wording in Admin → Notification sounds. [who/when, alert type, default text] */
 const VOICE_MSGS = [
     'hr_new' => ['HR — new candidate entered by Reception', 'assigned', 'New candidate entered: {name}, applying for {position}.'],
+    'reception_new' => ['Reception — candidate registered online', 'lead', 'New online registration: {name}, applying for {position}. Please assign an HR officer.'],
     'reception_file' => ['Reception — HR finished the file', 'file', 'File done: {name}, {position}. Please assign the deployment team.'],
     'deploy_new' => ['Deployment — new file assigned', 'deploy', 'New file ready for deployment: {name}, {position}.'],
     'deploy_portal' => ['Deployment — candidate activated the portal', 'deploy', '{name} has activated the candidate portal. You can message the candidate now.'],
@@ -247,7 +248,7 @@ const VOICE_STYLES = [
 ];
 function voice_style() { $v = (int)setting('voice_style', '0'); return isset(VOICE_STYLES[$v]) ? $v : 0; }
 /** With the recorded voice, the fixed words are a recording and these details (name, position…) follow in the device voice. */
-const VOICE_TAILS = ['hr_new' => '{name}, applying for {position}.', 'reception_file' => '{name}, {position}.', 'deploy_new' => '{name}, {position}.',
+const VOICE_TAILS = ['hr_new' => '{name}, applying for {position}.', 'reception_new' => '{name}, {position}.', 'reception_file' => '{name}, {position}.', 'deploy_new' => '{name}, {position}.',
     'deploy_portal' => '{name}.', 'deploy_chat' => '{name}.', 'deploy_response' => '{name}: {seq} interview, {response}.', 'admin_file' => '{name}, {position}. {amount}.',
     'admin_lead' => '{name}.', 'admin_payment' => '{amount}, from {party}.', 'admin_deal' => '{name}, {amount}.'];
 function voice_fill($t, array $vars)
@@ -505,26 +506,49 @@ function attendance_handle()
 {
     $u = me();
     if (!$u) return;
+    $ajax = ($_SERVER['HTTP_X_RH_AJAX'] ?? '') === '1';
+    // finish: JSON for the check-in button (so the sound plays at once), or a normal message + redirect
+    $done = function ($msg, $type = 'ok', $sound = null) use ($ajax) {
+        if ($ajax) { header('Content-Type: application/json'); echo json_encode(['ok' => $type === 'ok', 'msg' => $msg, 'type' => $type, 'sound' => $sound ? 'assets/voice/' . $sound . '.mp3?v=' . APP_VERSION : null]); exit; }
+        flash(e($msg), $type); back();
+    };
     $target = (int)p('att_user', $u['id']);
-    if ((int)val('SELECT r.is_super FROM users x JOIN roles r ON r.id=x.role_id WHERE x.id=?', [$target]) === 1) { flash('The Super Admin does not check in or out.', 'warn'); back(); }
-    if ($target !== (int)$u['id'] && !can('reception', 'edit') && !can('hrm', 'edit')) { flash('You cannot mark attendance for other staff.', 'bad'); back(); }
+    if ((int)val('SELECT r.is_super FROM users x JOIN roles r ON r.id=x.role_id WHERE x.id=?', [$target]) === 1) $done('The Super Admin does not check in or out.', 'warn');
+    if ($target !== (int)$u['id'] && !can('reception', 'edit') && !can('hrm', 'edit')) $done('You cannot mark attendance for other staff.', 'bad');
     $a = p('_att');
     if (!att_allowed((int)$u['id'])) {
         audit('attendance-blocked', 'staff_attendance', $target, null, ['ip' => client_ip(), 'action' => $a, 'by' => $u['id']]);
-        flash(ATT_LOCK_MSG, 'bad');
-        back();
+        $done(ATT_LOCK_MSG, 'bad');
     }
     $rec = attendance_today($target);
+    $self = $target === (int)$u['id'];
+    $cfg = att_cfg();
     if ($a === 'in') {
-        if ($rec) flash('Already checked in today at ' . substr($rec['check_in'], 11, 5) . '.', 'warn');
-        else { ins('staff_attendance', ['user_id' => $target, 'day' => today(), 'check_in' => now(), 'marked_by' => $u['id'], 'in_ip' => client_ip()]); audit('check-in', 'staff_attendance', $target); flash(($target === (int)$u['id'] ? 'Checked in' : user_name($target) . ' checked in') . ' at ' . date('H:i') . '.'); }
-    } elseif ($a === 'out') {
-        if (!$rec) flash('Check in first.', 'warn');
-        elseif ($rec['check_out']) flash('Already checked out today.', 'warn');
-        else { q('UPDATE staff_attendance SET check_out=?, out_ip=? WHERE id=?', [now(), client_ip(), $rec['id']]); audit('check-out', 'staff_attendance', $target); flash('Checked out at ' . date('H:i') . '.'); }
+        if ($rec) $done('Already checked in today at ' . substr($rec['check_in'], 11, 5) . '.', 'warn');
+        ins('staff_attendance', ['user_id' => $target, 'day' => today(), 'check_in' => now(), 'marked_by' => $u['id'], 'in_ip' => client_ip()]);
+        audit('check-in', 'staff_attendance', $target);
+        $late = att_minutes(date('H:i')) - att_minutes($cfg['start']);
+        $note = $late > $cfg['grace'] ? ' (' . att_dur($late) . ' late)' : ' (on time)';
+        $done(($self ? 'Checked in' : user_name($target) . ' checked in') . ' at ' . date('H:i') . $note . '.', 'ok', $self ? 'check_in' : null);
+    }
+    if ($a === 'out') {
+        if (!$rec) $done('Check in first.', 'warn');
+        if ($rec['check_out']) $done('Already checked out today.', 'warn');
+        q('UPDATE staff_attendance SET check_out=?, out_ip=? WHERE id=?', [now(), client_ip(), $rec['id']]);
+        audit('check-out', 'staff_attendance', $target);
+        $worked = (int)round((time() - strtotime($rec['check_in'])) / 60);
+        $done(($self ? 'Checked out' : user_name($target) . ' checked out') . ' at ' . date('H:i') . ' · worked ' . att_dur($worked) . '.', 'ok', $self ? 'check_out' : null);
     }
     back();
 }
+/** Office hours and working days (Staff Attendance → Settings). */
+function att_cfg()
+{
+    $c = json_decode((string)setting('att_cfg', ''), true) ?: [];
+    return ['start' => $c['start'] ?? '09:00', 'end' => $c['end'] ?? '18:00', 'grace' => (int)($c['grace'] ?? 0), 'days' => $c['days'] ?? [1, 2, 3, 4, 5, 6], 'holidays' => $c['holidays'] ?? []];
+}
+function att_minutes($hm) { $p = explode(':', (string)$hm); return (int)$p[0] * 60 + (int)($p[1] ?? 0); }
+function att_dur($min) { $min = max(0, (int)$min); return $min >= 60 ? intdiv($min, 60) . 'h ' . str_pad((string)($min % 60), 2, '0', STR_PAD_LEFT) . 'm' : $min . 'm'; }
 
 // ---------------------------------------------------------------- charts (SVG, no library)
 
@@ -577,6 +601,12 @@ function chart_donut(array $data)
         $i++;
     }
     return '<div class="donut"><svg viewBox="0 0 42 42">' . $seg . '<text x="21" y="22.5" text-anchor="middle">' . num($total) . '</text></svg><ul>' . $leg . '</ul></div>';
+}
+/** Small stat tile (same look as the dashboards). Tones: ok, bad, warn, brand, info, gold. */
+function stat_tile($label, $value, $iconName, $tone = 'brand', $href = null)
+{
+    $t = ['ok' => 'green', 'bad' => 'red', 'warn' => 'amber', 'brand' => 'blue', 'info' => 'violet', 'gold' => 'gold'][$tone] ?? 'blue';
+    return '<' . ($href ? 'a href="' . e($href) . '"' : 'div') . ' class="stat t-' . $t . '"><span class="stat-i">' . icon($iconName, 20) . '</span><span class="stat-v">' . e((string)$value) . '</span><span class="stat-l">' . e($label) . '</span></' . ($href ? 'a' : 'div') . '>';
 }
 function progress($pct, $label = '')
 {

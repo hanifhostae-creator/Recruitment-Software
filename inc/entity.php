@@ -168,9 +168,13 @@ function field_input($k, $f, $v, $name = null)
         case 'bool': return '<label class="check"><input type="hidden" name="' . $name . '" value="0"><input type="checkbox" name="' . $name . '" value="1"' . ($v ? ' checked' : '') . '> ' . e($f['label']) . '</label>';
         case 'file':
             if (!empty($f['camera'])) {
-                $in = '<div class="cam-field" data-cam="' . $id . '"><input id="' . $id . '" type="file" name="' . $name . '" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/*">'
-                    . '<div class="cam-btns"><button type="button" class="btn ghost sm" data-cam-open>' . icon('image', 15) . ' Take photo of paper CV</button><span class="muted small" data-cam-info>' . ($v ? 'Current: ' . file_link($v, basename($v)) : 'PDF, DOC, DOCX, JPG or PNG · max 10 MB') . '</span></div>'
-                    . '<div class="cam-box" hidden><video playsinline muted></video><div class="cam-pages"></div><div class="cam-ctl"><button type="button" class="btn sm" data-cam-shot>' . icon('zap', 15) . ' Capture page</button><button type="button" class="btn ok sm" data-cam-done>' . icon('check', 15) . ' Use photos</button><button type="button" class="btn ghost sm" data-cam-cancel>Cancel</button></div></div>'
+                $read = !empty($f['cvread']);
+                $in = '<div class="cam-field' . ($read ? ' cv-reader' : '') . '" data-cam="' . $id . '"' . ($read ? ' data-cvread' : '') . '>'
+                    . ($read ? '<div class="cvr-head"><span class="cvr-ico">' . icon('zap', 18) . '</span><div><b>Collect data from the CV</b><small>Upload the CV or scan the paper CV with the camera. The form fills itself; please check the highlighted fields.</small></div></div>' : '')
+                    . '<input id="' . $id . '" type="file" name="' . $name . '" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,image/*">'
+                    . '<div class="cam-btns"><button type="button" class="btn ' . ($read ? '' : 'ghost ') . 'sm" data-cam-open>' . icon('camera', 15) . ' ' . ($read ? 'Scan paper CV with camera' : 'Take photo of paper CV') . '</button>' . ($read ? '<button type="button" class="btn ghost sm" data-cv-read>' . icon('refresh', 14) . ' Read again</button>' : '') . '<span class="muted small" data-cam-info>' . ($v ? 'Current: ' . file_link($v, basename($v)) : 'PDF, DOC, DOCX, JPG or PNG · max 10 MB · camera scans are saved as PDF') . '</span></div>'
+                    . ($read ? '<div class="cv-status" data-cv-status hidden></div>' : '')
+                    . '<div class="cam-box" hidden><video playsinline muted></video><div class="cam-pages"></div><p class="muted small cam-tip">Hold each page flat inside the frame, in good light. Up to 6 pages.</p><div class="cam-ctl"><button type="button" class="btn sm" data-cam-shot>' . icon('camera', 15) . ' Capture page</button><button type="button" class="btn ok sm" data-cam-done>' . icon('check', 15) . ' Done — make PDF</button><button type="button" class="btn ghost sm" data-cam-cancel>Cancel</button></div></div>'
                     . '<input type="file" accept="image/*" capture="environment" data-cam-native hidden></div>';
                 break;
             }
