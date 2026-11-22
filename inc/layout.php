@@ -145,6 +145,7 @@ function page_start($title, $active = null, $showFlash = true)
     }
     echo '</div></header><main id="main" class="content">';
     if ($showFlash) foreach (flash() as $f) echo '<div class="alert ' . e($f[0]) . '" role="status">' . $f[1] . '</div>';
+    if (!empty($_SESSION['say_now'])) { echo '<div hidden data-say-now="' . e(json_encode($_SESSION['say_now'])) . '"></div>'; unset($_SESSION['say_now']); }
     if (!empty($_SESSION['say_note'])) {
         $sn = $_SESSION['say_note'];
         unset($_SESSION['say_note']);
@@ -183,6 +184,7 @@ function portal_start($title, $portalName, array $nav = [], $active = '', $logou
     if ($logout) echo '<a class="btn ghost sm p-logout" href="' . e($logout) . '">' . icon('logout', 15) . ' <span>Log out</span></a>';
     echo ($poll ? sound_button() : '') . '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 18) . '</button></header><main class="p-main" id="main">';
     foreach (flash() as $f) echo '<div class="alert ' . e($f[0]) . '" role="status">' . $f[1] . '</div>';
+    if (!empty($_SESSION['say_now'])) { echo '<div hidden data-say-now="' . e(json_encode($_SESSION['say_now'])) . '"></div>'; unset($_SESSION['say_now']); }
 }
 function portal_end()
 {

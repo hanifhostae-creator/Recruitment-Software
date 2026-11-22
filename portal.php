@@ -16,6 +16,7 @@ if (g('register') !== '') {
         q('UPDATE candidate_logins SET password_hash=?, token=NULL, token_expires=NULL WHERE id=?', [password_hash($pw, PASSWORD_DEFAULT), $l['id']]);
         portal_login('candidate', $c['id'], $c['full_name']);
         audit('portal-registered', 'candidates', $c['id']);
+        say_now([vclip('candidate_welcome'), ['s' => explode(' ', $c['full_name'])[0]]], 'Welcome to your candidate portal, ' . explode(' ', $c['full_name'])[0] . '.');
         foreach (chat_participants($c['id']) as $pid) notify_msg($pid, 'deploy_portal', ['name' => $c['full_name'], 'position' => $c['applied_position']], 'chat.php?c=' . $c['id']);
         flash('Your password is set. Welcome to your portal!');
         redirect('portal.php');

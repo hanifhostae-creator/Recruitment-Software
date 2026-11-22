@@ -51,6 +51,9 @@ ent('candidates', ['notify_new' => [null], 'label' => 'Candidates', 'prefix' => 
         if (!$old) {
             ins('stage_history', ['entity' => 'candidates', 'entity_id' => $id, 'from_stage' => null, 'to_stage' => $d['stage'], 'reason' => 'Registered at Reception', 'by_user' => me()['id'], 'by_name' => me()['name'], 'at' => now()]);
             if (!empty($d['hr_officer'])) notify_msg($d['hr_officer'], 'hr_new', ['name' => $d['full_name'], 'position' => $d['applied_position']], ent_url('candidates', $id));
+            $seq = [vclip('record_saved'), ['s' => $d['full_name']]];
+            if (!empty($d['hr_officer'])) { $seq[] = vclip('assigned_hr_done'); $seq[] = vname(user_name($d['hr_officer'])); }
+            say_now($seq, 'The candidate record has been saved successfully. ' . $d['full_name'] . '.' . (!empty($d['hr_officer']) ? ' Assigned to HR successfully, ' . user_name($d['hr_officer']) . '.' : ''));
         } elseif (!empty($d['hr_officer']) && $old['hr_officer'] != $d['hr_officer']) {
             notify_msg($d['hr_officer'], 'hr_new', ['name' => $d['full_name'] ?? $old['full_name'], 'position' => $d['applied_position'] ?? $old['applied_position']], ent_url('candidates', $id));
             if ($old['stage'] === 'New') stage_advance('candidates', $id, 'HR Assigned', 'HR officer assigned');
@@ -544,6 +547,7 @@ function candidate_actions()
                 audit('assign-hr', 'candidates', $r['id'], ['hr_officer' => $r['hr_officer']], ['hr_officer' => $uid]);
                 if ($r['stage'] === 'New') stage_advance('candidates', $r['id'], 'HR Assigned', 'Assigned to ' . user_name($uid));
                 notify_msg($uid, 'hr_new', ['name' => $r['full_name'], 'position' => $r['applied_position']], ent_url('candidates', $r['id']));
+                say_now([vclip('assigned_hr_done'), ['s' => $r['full_name']], vname(user_name($uid))], 'Assigned to HR successfully. ' . $r['full_name'] . ', ' . user_name($uid) . '.');
                 return ['msg' => 'Assigned to ' . user_name($uid) . '.'];
             }],
         'interview' => ['label' => 'Interview', 'icon' => 'clipboard', 'perm' => 'approve', 'simple_hide' => true, 'show' => function ($r) { return in_array($r['stage'], ['New', 'HR Assigned', 'Interviewed'], true); },
@@ -590,6 +594,7 @@ function candidate_actions()
                 $fid = create_inside_file($r['id'], null, $total, $paid, ['pay_method' => p('pay_method') ?: 'Cash', 'next_pay_date' => $paid < $total ? p('next_pay_date') : null]);
                 if (is_string($fid)) $fail($fid);
                 file_done_notify($r, $paid);
+                say_now([vclip('file_saved'), ['s' => $r['full_name']]], 'File done. The payment details have been saved. ' . $r['full_name'] . '.');
                 return ['msg' => 'File ' . e(val('SELECT ref_no FROM inside_files WHERE id=?', [$fid])) . ' done. Reception has been told. You can assign the deployment team below, or leave it to Reception.'];
             }],
         'file' => ['label' => 'File done', 'icon' => 'folder', 'perm' => 'approve', 'simple_hide' => true, 'show' => function ($r) { return $r['stage'] === 'Interviewed' && !candidate_file($r['id']); },
@@ -638,6 +643,7 @@ function candidate_actions()
                 audit('deploy', 'candidates', $r['id'], ['team_id' => $r['team_id'], 'deploy_officer' => $r['deploy_officer']], ['team_id' => $team, 'deploy_officer' => $off]);
                 stage_advance('candidates', $r['id'], 'In Deployment', 'Assigned to deployment');
                 $link = candidate_portal_login($r['id']);
+                say_now([vclip('assigned_deploy_done'), ['s' => $r['full_name']]], 'Assigned to the deployment team successfully. ' . $r['full_name'] . '.');
                 foreach (chat_participants($r['id']) as $pid) if ((int)$pid !== (int)me()['id']) notify_msg($pid, 'deploy_new', ['name' => $r['full_name'], 'position' => $r['applied_position']], 'chat.php?c=' . $r['id']);
                 $mail = candidate_welcome_email($r['id'], $link);
                 return ['msg' => 'Assigned to Deployment. ' . $mail . ' Registration link (valid 7 days): <a href="' . e($link) . '">' . e($link) . '</a>'];
@@ -776,10 +782,18 @@ function candidate_welcome_email($cid, $link)
 /** "Today's work" tiles on the staff home page: Reception, HR and Deployment see only their own next steps. */
 function staff_work_panel()
 {
-    if (is_super()) return;
     $uid = (int)me()['id']; $t = [];
     $tile = function ($label, $count, $hint, $iconName, $tone, $href, $action = false) { return ['label' => $label, 'n' => $count, 'hint' => $hint, 'icon' => $iconName, 'tone' => $tone, 'href' => $href, 'action' => $action]; };
-    if (can('reception')) {
+    if (is_super()) {
+        $t[] = $tile('Add new candidate', null, 'Upload or scan the CV — the form fills itself', 'user-plus', 'blue', 'candidates.php?t=all&a=new', true);
+        $t[] = $tile('Waiting for an HR officer', (int)val("SELECT COUNT(*) FROM candidates WHERE stage='New' AND archived=0"), 'Reception assigns them', 'clock', 'amber', 'reception.php');
+        $t[] = $tile('With HR now', (int)val("SELECT COUNT(*) FROM candidates WHERE stage IN ('HR Assigned','Interviewed') AND archived=0"), 'Interviews and files in progress', 'clipboard', 'violet', 'reception.php');
+        $t[] = $tile('Ready for deployment', (int)val("SELECT COUNT(*) FROM candidates WHERE stage='File Opened' AND archived=0"), 'Files waiting for a team', 'send', 'green', 'reception.php?t=ready');
+        $t[] = $tile('Staff present today', (int)attendance_present_count(today()), 'of ' . attendance_staff_count() . ' staff · open attendance', 'users', 'blue', 'attendance.php');
+        $t[] = $tile('Received today', money((float)val("SELECT COALESCE(SUM(amount),0) FROM payments WHERE direction='in' AND pay_date=?", [today()])), 'All sections · open the daily report', 'dollar', 'gold', 'finance.php?t=daily');
+        $t[] = $tile('Registered online today', (int)val("SELECT COUNT(*) FROM candidates WHERE source='Website' AND date(created_at)=? AND archived=0", [today()]), 'From the registration link', 'link', 'violet', 'reception.php');
+        $t[] = $tile('In deployment', (int)val("SELECT COUNT(*) FROM candidates WHERE stage='In Deployment' AND archived=0"), 'Candidates with the deployment teams', 'map-pin', 'amber', 'deployment.php?t=pipeline');
+    } elseif (can('reception')) {
         if (can('candidates', 'add')) $t[] = $tile('Add new candidate', null, 'Upload or scan the CV — the form fills itself', 'user-plus', 'blue', 'candidates.php?t=all&a=new', true);
         $t[] = $tile('Waiting for an HR officer', (int)val("SELECT COUNT(*) FROM candidates WHERE stage='New' AND archived=0"), 'Choose the HR officer for each one', 'clock', 'amber', 'reception.php');
         $t[] = $tile('Ready for deployment', (int)val("SELECT COUNT(*) FROM candidates WHERE stage='File Opened' AND archived=0"), 'HR finished the file — assign the team', 'send', 'green', 'reception.php?t=ready');
@@ -790,7 +804,7 @@ function staff_work_panel()
         $t[] = $tile('Files done this month', (int)val("SELECT COUNT(*) FROM inside_files WHERE hr_owner=? AND created_at>=? AND archived=0", [$uid, date('Y-m-01')]), 'Your progress', 'award', 'green', 'inside.php');
         if (can('candidates', 'add')) $t[] = $tile('Add new candidate', null, 'Upload or scan the CV', 'user-plus', 'violet', 'candidates.php?t=all&a=new', true);
     }
-    if (can('deployment')) {
+    if (!is_super() && can('deployment')) {
         list($w, $p) = function_exists('chat_scope') ? chat_scope(true) : ['1=0', []];
         $t[] = $tile('My candidates', (int)val("SELECT COUNT(*) FROM candidates c WHERE c.archived=0 AND c.stage IN ('In Deployment','Selected') AND $w", $p), 'Chat, send interview locations, record the result', 'users', 'blue', 'deployment.php');
         $t[] = $tile('Unread messages', function_exists('chat_unread_total') ? chat_unread_total() : 0, 'Reply to your candidates', 'chat', 'violet', 'chat.php');
@@ -798,9 +812,9 @@ function staff_work_panel()
         $t[] = $tile('Selected this month', (int)val("SELECT COUNT(*) FROM stage_history h JOIN candidates c ON c.id=h.entity_id WHERE h.entity='candidates' AND h.to_stage='Selected' AND h.at>=? AND $w", array_merge([date('Y-m-01')], $p)), 'Well done', 'award', 'green', 'deployment.php?t=pipeline');
     }
     if (!$t) return;
-    echo '<div class="work-head"><h3>' . icon('zap', 17) . ' Your work today</h3><span class="muted small">Press a box to start</span></div><div class="work-tiles">';
+    echo '<div class="work-head"><h3>' . icon('zap', 17) . ' ' . (is_super() ? 'Today at a glance' : 'Your work today') . '</h3><span class="muted small">Press a box to start</span></div><div class="work-tiles">';
     foreach ($t as $i => $x) echo '<a class="wtile t-' . e($x['tone']) . ($x['action'] ? ' act' : '') . ($x['n'] ? ' has' : '') . '" style="--d:' . ($i * 60) . 'ms" href="' . e($x['href']) . '"><span class="wt-ico">' . icon($x['icon'], 24) . '</span><span class="wt-b">'
-        . ($x['n'] !== null ? '<b class="wt-n">' . (int)$x['n'] . '</b>' : '') . '<span class="wt-l">' . e($x['label']) . '</span><small>' . e($x['hint']) . '</small></span><span class="wt-go">' . icon('arrow-right', 18) . '</span></a>';
+        . ($x['n'] !== null ? '<b class="wt-n' . (is_int($x['n']) ? '' : ' sm') . '">' . (is_int($x['n']) ? $x['n'] : e($x['n'])) . '</b>' : '') . '<span class="wt-l">' . e($x['label']) . '</span><small>' . e($x['hint']) . '</small></span><span class="wt-go">' . icon('arrow-right', 18) . '</span></a>';
     echo '</div>';
 }
 /** Link candidates use to register themselves (sent with the interview invitation). */

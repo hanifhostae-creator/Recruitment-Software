@@ -39,8 +39,9 @@ if (is_post()) {
         if ($vm != $oldVm) { set_setting('voice_msgs', json_encode($vm)); audit('voice-messages', 'settings', null, $oldVm, $vm); }
         $vs = p('voice_style') === '' ? voice_style() : (int)p('voice_style');
         if (isset(VOICE_STYLES[$vs]) && $vs !== voice_style()) { audit('voice-style', 'settings', null, ['voice_style' => voice_style()], ['voice_style' => $vs]); set_setting('voice_style', (string)$vs); }
+        foreach (['att_voice', 'att_repeat', 'action_voice'] as $sw) { $nv = p($sw) ? '1' : '0'; if ($nv !== setting($sw, '1')) { set_setting($sw, $nv); audit('voice-switch', 'settings', null, null, [$sw => $nv]); } }
         $vt = p('voice_tail') ? '1' : '0';
-        if ($vt !== setting('voice_tail', '0')) { set_setting('voice_tail', $vt); audit('voice-tail', 'settings', null, null, ['voice_tail' => $vt]); }
+        if ($vt !== setting('voice_tail', '1')) { set_setting('voice_tail', $vt); audit('voice-tail', 'settings', null, null, ['voice_tail' => $vt]); }
         flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
         redirect('admin.php?t=sounds');
     }
@@ -152,7 +153,14 @@ if ($t === 'sounds') {
     echo '<div class="voice-check"><button type="button" class="btn" data-voice-check>' . icon('volume', 15) . ' Check this device</button><span data-voice-result class="vc-res">Press to test that the recorded voice No. 1 plays on this computer or phone.</span></div>';
     echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Voice style</h3></div><p class="muted small" style="padding:0 18px">Press <b>Listen</b> to hear each voice, choose one, then press Save. Everyone hears the chosen voice. The exact voice depends on the computer or phone; the name under each style shows the voice this device will use.</p><div class="voice-grid">';
     foreach (VOICE_STYLES as $n => $vs) echo '<label class="voice-opt' . ($n ? '' : ' rec') . '"><input type="radio" name="voice_style" value="' . $n . '"' . ($n === voice_style() ? ' checked' : '') . '><span class="vo-n">' . ($n ?: '★') . '</span><span class="vo-t"><b>' . e($vs[0]) . '</b><small>' . e($vs[1]) . '</small>' . ($n ? '<small class="vo-real" data-voice-name="' . $n . '"></small>' : '<small class="vo-real">Same sound on every computer and phone</small>') . '</span><button type="button" class="btn ghost sm" data-voice-test="' . $n . '">' . icon('volume', 14) . ' Listen</button></label>';
-    echo '</div><label class="check" style="padding:0 18px 6px;display:flex"><input type="checkbox" name="voice_tail" value="1"' . (setting('voice_tail', '0') === '1' ? ' checked' : '') . '> Also read the name and position after the recording (uses the computer\'s own voice, which sounds different; off = only the professional recording)</label>';
+    echo '</div><label class="check" style="padding:0 18px 6px;display:flex"><input type="checkbox" name="voice_tail" value="1"' . (setting('voice_tail', '1') === '1' ? ' checked' : '') . '> Also read the name and position after the recording (uses the computer\'s own voice, which sounds different; off = only the professional recording)</label>';
+    echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('clock', 17) . ' Check-in, check-out and work confirmations</h3></div><div class="check-grid" style="padding:0 18px 8px">'
+        . '<label class="check"><input type="checkbox" name="att_voice" value="1"' . (setting('att_voice', '1') === '1' ? ' checked' : '') . '> Speak on check-in / check-out <small class="muted">("Good morning, name. Have a great day…")</small></label>'
+        . '<label class="check"><input type="checkbox" name="att_repeat" value="1"' . (setting('att_repeat', '1') === '1' ? ' checked' : '') . '> Show "Repeat voice" on the check-in card <small class="muted">(for testing — untick later)</small></label>'
+        . '<label class="check"><input type="checkbox" name="action_voice" value="1"' . (setting('action_voice', '1') === '1' ? ' checked' : '') . '> Speak a confirmation after saving <small class="muted">(candidate saved, assigned to HR / deployment, file done)</small></label></div>';
+    $named = []; $missing = [];
+    foreach (attendance_users() as $s) { $vn = vname($s['name']); if (isset($vn['c'])) $named[] = $s['name']; else $missing[] = $s['name']; }
+    echo '<p class="small" style="padding:0 18px">' . icon('user', 13) . ' <b>Staff names recorded in voice No. 1:</b> ' . ($named ? e(implode(', ', $named)) : 'none yet') . '.' . ($missing ? ' <span class="muted">Not recorded yet (read by the computer voice): ' . e(implode(', ', $missing)) . '. These names can be recorded in voice No. 1 on request.</span>' : '') . '</p>';
     echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Spoken messages</h3></div><p class="muted small" style="padding:0 18px">The words shown in the alert and read aloud. Keep the words in curly brackets — they are replaced with the real name, position or amount. Leave a box empty to use the standard text.</p>'
         . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Who hears it / when</th><th>Message</th><th></th></tr></thead><tbody>';
     foreach (VOICE_MSGS as $k => $d) {

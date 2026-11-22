@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.9.0 (22 Nov 2026)
+## Current version: 1.10.0 (22 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -174,6 +174,21 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   - **Staff home** ("Your work today" tiles): Reception, HR and Deployment see only their next steps with live counts; the
     attendance box is on the home page.
 
+- **v1.10** (22 Nov):
+  - **Spoken sequences**: `vclip($key)` (recording), `vname($name)` (recorded staff name from `assets/voice/names/<full-name>.mp3` or
+    `<first-name>.mp3`, else the device voice), `say_now($seq, $text)` = confirmation played when the next page opens (`data-say-now`,
+    with a Repeat toast). JS `playSeq()` plays recordings and spoken words one after another.
+  - **Check-in**: "Good morning / afternoon / evening, <name>. Have a great day at work. You are checked in." Check-out: same text as before.
+    Card has "Repeat voice" + Done while Admin → Notification sounds → "Show Repeat voice" is ticked (default on for testing).
+    Switches: `att_voice`, `att_repeat`, `action_voice`. Staff names recorded so far: demo staff + "Hayat" (record more on request,
+    same voice, file name = name in lower case with dashes).
+  - **Work confirmations** (to the person who did it): candidate saved (+ assigned to HR), assigned to HR, file done, assigned to
+    deployment. Alerts: HR "You have a new candidate assigned" + name, ready for position (`hr_new` text changed); reading the
+    name after recordings is ON again (upgrade_v20). Candidate portal: interview location → "You have a new interview invitation…",
+    first sign-in → "Welcome to your candidate portal".
+  - **Super Admin home**: "Today at a glance" tiles (add candidate, waiting for HR, with HR, ready for deployment, staff present,
+    received today, registered online, in deployment); all stat boxes restyled like the staff work tiles.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -183,6 +198,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-22 · v1.10.0 · Check-in greeting with name + repeat, spoken work confirmations, Super Admin glance tiles, smooth stat boxes.
 - 2026-11-22 · v1.9.0 · Check-in/out sounds, Staff Attendance reports + Excel, fill the form from the CV (upload/camera, PDF scans), online registration link, staff work tiles.
 - 2026-11-22 · v1.8.1 · Recorded voice plays reliably (no fallback to the computer voice), device check button, attendance network columns.
 - 2026-11-22 · v1.8.0 · Office Wi-Fi rule for check-in/check-out with admin settings, exceptions and blocked-attempt log.

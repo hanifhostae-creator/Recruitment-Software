@@ -11,6 +11,7 @@ if (is_super()) {
         . '<div class="hero-a"><a class="btn ghost" href="reports.php">' . icon('bar-chart', 16) . ' Reports</a><a class="btn gold" href="candidates.php?a=new">' . icon('user-plus', 16) . ' New candidate</a></div></div>';
     if (trim((string)setting('site_url', '')) === '') echo '<div class="alert warn">' . icon('alert', 15) . ' <b>Set the System URL</b> in <a href="settings.php">Settings</a> (for example <code>https://crm.yourdomain.com</code>). Password reset and portal emails use it.</div>';
     if (trim((string)setting('smtp_host', '')) === '') echo '<div class="alert warn">' . icon('mail', 15) . ' <b>Email is not set up.</b> Password reset emails need an SMTP mailbox: <a href="settings.php">Settings → Email</a>, then "Send a test email".</div>';
+    if ($sec === 'overview' && function_exists('staff_work_panel')) staff_work_panel();
     dash_render($sec);
     page_end();
     exit;

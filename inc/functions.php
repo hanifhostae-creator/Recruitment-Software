@@ -220,7 +220,7 @@ function notif_config()
 }
 /** Spoken / written alert messages. The Super Admin edits the wording in Admin → Notification sounds. [who/when, alert type, default text] */
 const VOICE_MSGS = [
-    'hr_new' => ['HR — new candidate entered by Reception', 'assigned', 'New candidate entered: {name}, applying for {position}.'],
+    'hr_new' => ['HR — new candidate assigned', 'assigned', 'New candidate assigned to you: {name}, ready for {position}.'],
     'reception_new' => ['Reception — candidate registered online', 'lead', 'New online registration: {name}, applying for {position}. Please assign an HR officer.'],
     'reception_file' => ['Reception — HR finished the file', 'file', 'File done: {name}, {position}. Please assign the deployment team.'],
     'deploy_new' => ['Deployment — new file assigned', 'deploy', 'New file ready for deployment: {name}, {position}.'],
@@ -248,7 +248,7 @@ const VOICE_STYLES = [
 ];
 function voice_style() { $v = (int)setting('voice_style', '0'); return isset(VOICE_STYLES[$v]) ? $v : 0; }
 /** With the recorded voice, the fixed words are a recording and these details (name, position…) follow in the device voice. */
-const VOICE_TAILS = ['hr_new' => '{name}, applying for {position}.', 'reception_new' => '{name}, {position}.', 'reception_file' => '{name}, {position}.', 'deploy_new' => '{name}, {position}.',
+const VOICE_TAILS = ['hr_new' => '{name}, ready for {position}.', 'reception_new' => '{name}, {position}.', 'reception_file' => '{name}, {position}.', 'deploy_new' => '{name}, {position}.',
     'deploy_portal' => '{name}.', 'deploy_chat' => '{name}.', 'deploy_response' => '{name}: {seq} interview, {response}.', 'admin_file' => '{name}, {position}. {amount}.',
     'admin_lead' => '{name}.', 'admin_payment' => '{amount}, from {party}.', 'admin_deal' => '{name}, {amount}.'];
 function voice_fill($t, array $vars)
@@ -266,12 +266,31 @@ function voice_clip($key)
     if (!empty($custom[$key])) return '';
     return 'assets/voice/' . $key . '.mp3?v=' . APP_VERSION;
 }
+/** Pieces of a spoken message: a recording, or text read by the device voice. */
+function vclip($key) { return ['c' => 'assets/voice/' . $key . '.mp3?v=' . APP_VERSION]; }
+/** A person's name: their recorded name (assets/voice/names/full-name.mp3 or first-name.mp3) when it exists, otherwise read aloud. */
+function vname($name)
+{
+    $name = trim((string)$name); $first = explode(' ', $name)[0];
+    foreach (array_unique([$name, $first]) as $n) {
+        $slug = trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($n)), '-');
+        if ($slug !== '' && is_file(ROOT . '/assets/voice/names/' . $slug . '.mp3')) return ['c' => 'assets/voice/names/' . $slug . '.mp3?v=' . APP_VERSION];
+    }
+    return ['s' => $first];
+}
+/** Speak to the person who just did something (played when the next page opens). */
+function say_now(array $seq, $text)
+{
+    if (setting('action_voice', '1') !== '1') return;
+    $_SESSION['say_now'] = ['seq' => $seq, 'text' => $text];
+}
+function greeting() { $h = (int)date('G'); return $h < 12 ? 'morning' : ($h < 17 ? 'afternoon' : 'evening'); }
 /** data-* attributes for a "Repeat" button. */
 function voice_attrs($text, $key = null, $tail = null)
 {
     $clip = voice_clip($key);
     if (!$clip && !$key && ($clip = voice_clip('general'))) $tail = $text;
-    return ' data-say="' . e($text) . '"' . ($clip ? ' data-clip="' . e($clip) . '" data-tail="' . e(setting('voice_tail', '0') === '1' ? (string)$tail : '') . '"' : '');
+    return ' data-say="' . e($text) . '"' . ($clip ? ' data-clip="' . e($clip) . '" data-tail="' . e(setting('voice_tail', '1') === '1' ? (string)$tail : '') . '"' : '');
 }
 /** Text of an alert with {placeholders} filled in. */
 function voice_text($key, array $vars = [])
@@ -508,8 +527,10 @@ function attendance_handle()
     if (!$u) return;
     $ajax = ($_SERVER['HTTP_X_RH_AJAX'] ?? '') === '1';
     // finish: JSON for the check-in button (so the sound plays at once), or a normal message + redirect
-    $done = function ($msg, $type = 'ok', $sound = null) use ($ajax) {
-        if ($ajax) { header('Content-Type: application/json'); echo json_encode(['ok' => $type === 'ok', 'msg' => $msg, 'type' => $type, 'sound' => $sound ? 'assets/voice/' . $sound . '.mp3?v=' . APP_VERSION : null]); exit; }
+    $done = function ($msg, $type = 'ok', $sound = null, $seq = null, $text = '') use ($ajax) {
+        $voice = $seq && setting('att_voice', '1') === '1';
+        if ($ajax) { header('Content-Type: application/json'); echo json_encode(['ok' => $type === 'ok', 'msg' => $msg, 'type' => $type, 'sound' => $sound ? 'assets/voice/' . $sound . '.mp3?v=' . APP_VERSION : null, 'seq' => $voice ? $seq : null, 'text' => $voice ? $text : '', 'repeat' => $voice && setting('att_repeat', '1') === '1']); exit; }
+        if ($voice) say_now($seq, $text);
         flash(e($msg), $type); back();
     };
     $target = (int)p('att_user', $u['id']);
@@ -529,7 +550,8 @@ function attendance_handle()
         audit('check-in', 'staff_attendance', $target);
         $late = att_minutes(date('H:i')) - att_minutes($cfg['start']);
         $note = $late > $cfg['grace'] ? ' (' . att_dur($late) . ' late)' : ' (on time)';
-        $done(($self ? 'Checked in' : user_name($target) . ' checked in') . ' at ' . date('H:i') . $note . '.', 'ok', $self ? 'check_in' : null);
+        $g = greeting(); $nm = user_name($target);
+        $done(($self ? 'Checked in' : $nm . ' checked in') . ' at ' . date('H:i') . $note . '.', 'ok', null, [vclip('good_' . $g), vname($nm), vclip('checkin_tail')], 'Good ' . $g . ', ' . explode(' ', $nm)[0] . '. Have a great day at work. You are checked in.');
     }
     if ($a === 'out') {
         if (!$rec) $done('Check in first.', 'warn');
@@ -537,7 +559,7 @@ function attendance_handle()
         q('UPDATE staff_attendance SET check_out=?, out_ip=? WHERE id=?', [now(), client_ip(), $rec['id']]);
         audit('check-out', 'staff_attendance', $target);
         $worked = (int)round((time() - strtotime($rec['check_in'])) / 60);
-        $done(($self ? 'Checked out' : user_name($target) . ' checked out') . ' at ' . date('H:i') . ' · worked ' . att_dur($worked) . '.', 'ok', $self ? 'check_out' : null);
+        $done(($self ? 'Checked out' : user_name($target) . ' checked out') . ' at ' . date('H:i') . ' · worked ' . att_dur($worked) . '.', 'ok', null, [vclip('check_out')], 'Checked out. Thank you for your work today. See you tomorrow.');
     }
     back();
 }

@@ -385,6 +385,7 @@
   function unlockVoice() {
     var p = getPlayer();
     if (pending) { var x = pending; pending = null; playClip(x[0], x[1], x[2]); return; }
+    if (pendingSeq) { var y = pendingSeq; pendingSeq = null; playSeq(y[0], y[1], y[2]); return; }
     if (p.getAttribute('data-ok')) return;
     p.src = 'assets/voice/silence.mp3'; var pr = p.play();
     if (pr && pr.then) pr.then(function () { p.setAttribute('data-ok', '1'); }).catch(function () {});
@@ -400,10 +401,12 @@
   // check-in / check-out: sent in the background so the confirmation sound plays straight away
   function attPop(d) {
     var el = document.createElement('div'); el.className = 'att-pop ' + (d.type || 'ok');
-    el.innerHTML = '<div class="ap-card"><div class="ap-ico">' + (d.ok ? '&#10003;' : '!') + '</div><b></b><span></span></div>';
-    el.querySelector('b').textContent = d.ok ? (/out/i.test(d.msg) && /Checked out|checked out/.test(d.msg) ? 'Checked out' : 'Checked in') : 'Not done';
+    el.innerHTML = '<div class="ap-card"><div class="ap-ico">' + (d.ok ? '&#10003;' : '!') + '</div><b></b><span></span>' + (d.repeat ? '<div class="ap-btns"><button type="button" class="btn ghost" data-ap-rep>&#8635; Repeat voice</button><button type="button" class="btn" data-ap-ok>Done</button></div>' : '') + '</div>';
+    el.querySelector('b').textContent = d.ok ? (/checked out/i.test(d.msg) ? 'Checked out' : 'Checked in') : 'Not done';
     el.querySelector('span').textContent = d.msg; document.body.appendChild(el);
-    el.addEventListener('click', function () { location.reload(); });
+    var rep = el.querySelector('[data-ap-rep]');
+    if (rep) rep.addEventListener('click', function (e) { e.stopPropagation(); playSeq(d.seq, d.text); });
+    el.addEventListener('click', function (e) { if (!e.target.closest('[data-ap-rep]')) location.reload(); });
   }
   document.addEventListener('submit', function (ev) {
     var f = ev.target, b = ev.submitter;
@@ -416,10 +419,22 @@
       .then(function (d) {
         attPop(d);
         var go = function () { location.reload(); };
-        if (d.sound) { beep(true, 'chime'); setTimeout(function () { playClip(d.sound, '', '', function () { setTimeout(go, 600); }); }, 650); setTimeout(go, 9000); }
-        else setTimeout(go, d.ok ? 1600 : 3200);
+        if (d.seq) { beep(true, 'chime'); setTimeout(function () { playSeq(d.seq, d.text, function () { if (!d.repeat) setTimeout(go, 700); }); }, 650); if (!d.repeat) setTimeout(go, 12000); }
+        else if (!d.repeat) setTimeout(go, d.ok ? 1800 : 3200);
       }).catch(function () { f.submit(); });
   });
+  // a confirmation spoken when a page opens after saving (for example "The candidate record has been saved")
+  var sayNow = document.querySelector('[data-say-now]');
+  if (sayNow) {
+    try {
+      var sn = JSON.parse(sayNow.getAttribute('data-say-now'));
+      setTimeout(function () { playSeq(sn.seq, sn.text); }, 350);
+      var box = document.getElementById('toasts');
+      if (box && sn.text) { var w = document.createElement('div'); w.className = 'toast'; w.innerHTML = '<div class="toast-main"><i class="toast-i">&#128266;</i><div><b>Voice</b><span></span></div></div><button type="button" class="toast-rep" title="Repeat">&#8635;</button><button type="button" class="toast-x" aria-label="Close">&times;</button>';
+        w.querySelector('span').textContent = sn.text; w.querySelector('.toast-rep').addEventListener('click', function () { playSeq(sn.seq, sn.text); }); w.querySelector('.toast-x').addEventListener('click', function () { w.remove(); });
+        box.appendChild(w); setTimeout(function () { if (w.parentNode) w.remove(); }, 15000); }
+    } catch (e) {}
+  }
   // Admin → Notification sounds: "Check this device"
   document.addEventListener('click', function (ev) {
     var b = ev.target.closest('[data-voice-check]'); if (!b) return;
@@ -431,15 +446,34 @@
       out.className = 'vc-res ' + m[0]; out.textContent = m[1];
     });
   });
-  function speak(text, force, style) {
-    if (!text || (!force && !soundOn()) || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+  function speak(text, force, style, onEnd) {
+    if (!text || (!force && !soundOn()) || !window.speechSynthesis || !window.SpeechSynthesisUtterance) { if (onEnd) onEnd(); return; }
     try {
       var st = STYLES[styleNo(style)], v = pickVoice(st), say = (st[4] || '') + text;
       var u = new SpeechSynthesisUtterance(say);
       if (v) u.voice = v; u.lang = v ? v.lang : st[0]; u.rate = st[2]; u.pitch = st[3]; u.volume = 1;
+      if (onEnd) { var fired = false, fin = function () { if (!fired) { fired = true; onEnd(); } }; u.onend = fin; u.onerror = fin; setTimeout(fin, 1500 + say.length * 120); }
       window.speechSynthesis.cancel();
       if (st.length > 4) setTimeout(function () { window.speechSynthesis.speak(u); }, 450); else window.speechSynthesis.speak(u);
-    } catch (e) {}
+    } catch (e) { if (onEnd) onEnd(); }
+  }
+  // play a list of recordings ({c: file}) and spoken words ({s: text}) one after another
+  var pendingSeq = null;
+  function playSeq(seq, text, done) {
+    if (!seq || !seq.length || styleNo() !== 0) { speak(text, true, null, done); return; }
+    var i = 0;
+    (function next() {
+      if (i >= seq.length) { if (done) done(); return; }
+      var it = seq[i++];
+      if (it.s) { speak(it.s, true, 0, next); return; }
+      var p = getPlayer(); p.onended = next; p.onerror = next;
+      try { p.src = it.c; p.currentTime = 0; } catch (e) {}
+      var pr = p.play();
+      if (pr && pr.catch) pr.catch(function (err) {
+        if (err && err.name === 'NotAllowedError') { pendingSeq = [seq.slice(i - 1), text, done]; if (!hinted) { hinted = true; toast('Tap anywhere on the page to hear the voice.', null, 'Voice', null); } }
+        else next();
+      });
+    })();
   }
   function showVoiceNames() {
     document.querySelectorAll('[data-voice-name]').forEach(function (el) { var v = pickVoice(STYLES[el.getAttribute('data-voice-name')]); el.textContent = v ? 'This device: ' + v.name : 'This device: default voice'; });

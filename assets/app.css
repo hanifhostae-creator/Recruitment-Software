@@ -708,3 +708,13 @@ input.autofilled, select.autofilled, textarea.autofilled { background: color-mix
 .wtile.act { background: linear-gradient(135deg, var(--brand), #6a4dff) padding-box, linear-gradient(135deg, var(--brand), #6a4dff) border-box; color: #fff; }
 .wtile.act .wt-l, .wtile.act small { color: #fff; } .wtile.act small { opacity: .85; } .wtile.act .wt-ico { background: rgba(255,255,255,.18); box-shadow: none; } .wtile.act::after { background: rgba(255,255,255,.12); } .wtile.act .wt-go { background: rgba(255,255,255,.18); color: #fff; }
 .wtile.has .wt-n { color: var(--tone); }
+.ap-btns { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+/* v1.10 — smooth stat boxes everywhere (same look as the staff work tiles) */
+.stat { padding: 18px; border-radius: 20px; border: 1px solid transparent !important; background: linear-gradient(var(--surface), var(--surface)) padding-box, var(--card-edge) border-box !important; column-gap: 14px; }
+.stat-i { width: 52px; height: 52px; border-radius: 16px; color: #fff !important; background: linear-gradient(135deg, var(--tone), color-mix(in srgb, var(--tone) 60%, #7c4dff)) !important; box-shadow: 0 14px 24px -12px var(--tone) !important; }
+.stat-i .i { color: #fff; }
+.stat-v { font-size: 25px; letter-spacing: -.02em; } .stat-l { font-weight: 600; }
+.stat::after { width: 120px; height: 120px; right: -40px; top: -40px; transition: transform .4s; } .stat:hover::after { transform: scale(1.25); }
+.stat:hover .stat-i { animation: floaty 1.6s ease-in-out infinite; }
+.wtile small .money, .wt-l + small { word-break: break-word; }
+.wt-n.sm { font-size: 21px; }
