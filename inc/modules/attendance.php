@@ -122,6 +122,29 @@ mod('attendance', ['label' => 'Staff Attendance', 'icon' => 'clock', 'area' => '
             echo simple_table(['Date', 'Day', 'Status', 'Check-in', 'Check-out', 'Hours', 'Late by', 'Left early', 'Overtime', 'Network', 'Note'], $rows);
             card_close();
         }],
+        'testing' => ['label' => 'Testing', 'icon' => 'refresh', 'perm' => 'edit', 'post' => function ($base, $mod) {
+            if (!is_post()) return;
+            require_action($mod, 'edit');
+            if (p('do') === 'mode') { $on = p('on') === '1'; set_setting('att_test', $on ? '1' : '0'); audit('attendance-testing', 'settings', null, null, ['on' => $on]); flash($on ? 'Testing mode is on: staff can check in again after checking out.' : 'Testing mode is off. Normal rule: one check-in and one check-out per day.'); }
+            if (p('do') === 'reset') { $uid = (int)p('uid'); flash(att_reset_today($uid, 'Reset by ' . me()['name'] . ' for testing') ? e(user_name($uid)) . ' can check in again today.' : 'There was nothing to reset.', 'ok'); }
+            if (p('do') === 'reset_all') { $n = 0; foreach (rows('SELECT user_id FROM staff_attendance WHERE day=?', [today()]) as $r) $n += att_reset_today((int)$r['user_id'], 'Reset all by ' . me()['name'] . ' for testing') ? 1 : 0; flash($n . ' check-in' . ($n === 1 ? '' : 's') . ' reset. Everyone can check in again today.'); }
+            redirect($base);
+        }, 'fn' => function ($base, $mod) {
+            $on = att_testing();
+            echo '<div class="office-hero card ' . ($on ? 'on' : 'off') . '"><div class="oh-ico">' . icon('refresh', 30) . '</div><div class="oh-t"><small>Check-in testing</small><h2>' . ($on ? 'Testing mode is ON' : 'Testing mode is off') . '</h2><p class="muted">'
+                . ($on ? 'After checking out, staff see "Check in again" and can test the check-in and check-out voice as many times as they like. Each new check-in replaces today\'s times. Switch it off when testing is finished.' : 'Normal rule: one check-in and one check-out per day. Switch this on to let staff check in and out again while you test the voice and the screens.') . '</p></div>'
+                . '<form method="post" action="' . e($base) . '" data-confirm="' . ($on ? 'Switch testing mode off?' : 'Switch testing mode on?') . '">' . csrf_field() . '<input type="hidden" name="do" value="mode"><input type="hidden" name="on" value="' . ($on ? '0' : '1') . '"><button class="btn big ' . ($on ? 'ghost' : '') . '">' . icon($on ? 'x' : 'refresh', 16) . ' ' . ($on ? 'Switch off' : 'Switch on') . '</button></form></div>';
+            $today = rows('SELECT a.*, u.name FROM staff_attendance a JOIN users u ON u.id=a.user_id WHERE a.day=? ORDER BY u.name', [today()]);
+            $rows = array_map(function ($a) use ($base) { return ['<b>' . e($a['name']) . '</b>', e(substr($a['check_in'], 11, 5)), e($a['check_out'] ? substr($a['check_out'], 11, 5) : '—'),
+                '<form method="post" action="' . e($base) . '" data-confirm="Reset today\'s check-in of ' . e($a['name']) . '? They can check in again. The old times stay in the audit log.">' . csrf_field() . '<input type="hidden" name="do" value="reset"><input type="hidden" name="uid" value="' . (int)$a['user_id'] . '"><button class="btn ghost sm">' . icon('refresh', 13) . ' Reset today</button></form>']; }, $today);
+            card_open(icon('clock', 17) . ' Today\'s check-ins · ' . e(dfmt(today())), $today ? '<form method="post" action="' . e($base) . '" data-confirm="Reset ALL of today\'s check-ins? Everyone can check in again.">' . csrf_field() . '<input type="hidden" name="do" value="reset_all"><button class="btn ghost sm danger">' . icon('refresh', 13) . ' Reset everyone today</button></form>' : '');
+            echo '<p class="muted small">Reset lets one person check in and out again today, even when testing mode is off. Every reset is written to the audit log with the old times.</p>' . simple_table(['Staff', 'Check-in', 'Check-out', ''], $rows, 'Nobody has checked in today yet.');
+            card_close();
+            $log = rows("SELECT * FROM audit WHERE action='attendance-reset' ORDER BY id DESC LIMIT 15");
+            card_open(icon('shield', 17) . ' Reset history');
+            echo simple_table(['When', 'By / reason', 'Old times'], array_map(function ($l) { $o = json_decode((string)$l['old_v'], true) ?: []; return [e(dtfmt($l['at'])), e($l['reason'] ?: $l['actor']), e(substr($o['check_in'] ?? '', 11, 5) . ' – ' . (($o['check_out'] ?? '') ? substr($o['check_out'], 11, 5) : '—')) . ' <small class="muted">' . e(user_name($l['rec_id'])) . '</small>']; }, $log), 'No resets yet.');
+            card_close();
+        }],
         'settings' => ['label' => 'Office hours', 'icon' => 'settings', 'perm' => 'edit', 'post' => function ($base, $mod) {
             if (!is_post()) return;
             require_action($mod, 'edit');

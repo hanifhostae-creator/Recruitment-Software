@@ -545,6 +545,7 @@ function attendance_handle()
     $self = $target === (int)$u['id'];
     $cfg = att_cfg();
     if ($a === 'in') {
+        if ($rec && $rec['check_out'] && att_testing()) { att_reset_today($target, 'Testing mode: checked in again'); $rec = null; }
         if ($rec) $done('Already checked in today at ' . substr($rec['check_in'], 11, 5) . '.', 'warn');
         ins('staff_attendance', ['user_id' => $target, 'day' => today(), 'check_in' => now(), 'marked_by' => $u['id'], 'in_ip' => client_ip()]);
         audit('check-in', 'staff_attendance', $target);
@@ -562,6 +563,17 @@ function attendance_handle()
         $done(($self ? 'Checked out' : user_name($target) . ' checked out') . ' at ' . date('H:i') . ' · worked ' . att_dur($worked) . '.', 'ok', null, [vclip('check_out')], 'Checked out. Thank you for your work today. See you tomorrow.');
     }
     back();
+}
+/** Testing mode (Staff Attendance → Testing): staff may check in again after checking out. */
+function att_testing() { return setting('att_test', '0') === '1'; }
+/** Remove today's check-in of one person so they can check in again. The old times stay in the audit log. */
+function att_reset_today($uid, $reason)
+{
+    $rec = attendance_today($uid);
+    if (!$rec) return false;
+    q('DELETE FROM staff_attendance WHERE id=?', [$rec['id']]);
+    audit('attendance-reset', 'staff_attendance', $uid, ['check_in' => $rec['check_in'], 'check_out' => $rec['check_out']], null, $reason);
+    return true;
 }
 /** Office hours and working days (Staff Attendance → Settings). */
 function att_cfg()

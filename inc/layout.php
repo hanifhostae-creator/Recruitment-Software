@@ -133,7 +133,7 @@ function page_start($title, $active = null, $showFlash = true)
         if (!$okNet && (!$att || !$att['check_out'])) echo '<span class="att-lock" title="' . e(ATT_LOCK_MSG) . '">' . icon('lock', 14) . '<span> Office Wi-Fi only</span></span>';
         elseif (!$att) echo '<button class="btn sm" name="_att" value="in">' . icon('login', 15) . '<span> Check in</span></button>';
         elseif (!$att['check_out']) echo '<span class="att-on" title="Checked in at ' . e(substr($att['check_in'], 11, 5)) . '"><i></i>' . e(substr($att['check_in'], 11, 5)) . '</span><button class="btn ghost sm" name="_att" value="out">' . icon('logout', 15) . '<span> Check out</span></button>';
-        else echo '<span class="att-done">' . icon('check-circle', 15) . ' ' . e(substr($att['check_in'], 11, 5)) . '–' . e(substr($att['check_out'], 11, 5)) . '</span>';
+        else echo '<span class="att-done">' . icon('check-circle', 15) . ' ' . e(substr($att['check_in'], 11, 5)) . '–' . e(substr($att['check_out'], 11, 5)) . '</span>' . (att_testing() && $okNet ? '<button class="btn ghost sm" name="_att" value="in" title="Testing mode is on">' . icon('refresh', 14) . '<span> Check in again</span></button>' : '');
         echo '</form>';
         }
         echo sound_button() . '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 19) . '</button>'
@@ -224,6 +224,7 @@ function attendance_box()
     if (!$a) echo '<p>You have not checked in today.</p>' . ($okNet ? '<button class="btn" name="_att" value="in">' . icon('login', 16) . ' Check in</button>' : '<button class="btn" type="button" disabled>' . icon('lock', 16) . ' Check in</button>');
     else {
         echo '<p>Checked in <b>' . e(substr($a['check_in'], 11, 5)) . '</b>' . ($a['check_out'] ? ' · checked out <b>' . e(substr($a['check_out'], 11, 5)) . '</b>' : '') . '</p>';
+        if ($a['check_out'] && att_testing() && $okNet) echo '<button class="btn" name="_att" value="in">' . icon('refresh', 16) . ' Check in again <small>(testing)</small></button>';
         if (!$a['check_out']) echo $okNet ? '<button class="btn ghost" name="_att" value="out">' . icon('logout', 16) . ' Check out</button>' : '<button class="btn ghost" type="button" disabled>' . icon('lock', 16) . ' Check out</button>';
     }
     echo '</form></div>';
