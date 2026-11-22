@@ -847,9 +847,10 @@ mod('reception', ['label' => 'Reception', 'icon' => 'home', 'area' => 'Inside Hi
                 elseif (!$a['check_out']) $btn .= '<button class="btn ghost sm" name="_att" value="out">Check out</button>';
                 $btn .= '</form>';
             }
-            $data[] = ['<b>' . e($s['name']) . '</b> <span class="muted small">@' . e($s['username']) . '</span>', $a ? badge('Present') : badge('Not checked in'), e($a ? substr($a['check_in'], 11, 5) : '—'), e($a && $a['check_out'] ? substr($a['check_out'], 11, 5) : '—'), $a && $a['marked_by'] != $s['id'] ? '<small class="muted">by ' . e(user_name($a['marked_by'])) . '</small>' : '', $btn];
+            $nw = $a && !empty($a['in_ip']) ? (($nn = office_network_name($a['in_ip'])) ? '<small>' . icon('wifi', 12) . ' ' . e($nn) . '</small>' : '<small class="muted">Outside office</small>') : '<span class="muted">—</span>';
+            $data[] = ['<b>' . e($s['name']) . '</b> <span class="muted small">@' . e($s['username']) . '</span>', $a ? badge('Present') : badge('Not checked in'), e($a ? substr($a['check_in'], 11, 5) : '—'), e($a && $a['check_out'] ? substr($a['check_out'], 11, 5) : '—'), $nw, $a && $a['marked_by'] != $s['id'] ? '<small class="muted">by ' . e(user_name($a['marked_by'])) . '</small>' : '', $btn];
         }
-        echo simple_table(['Staff', 'Today', 'Check-in', 'Check-out', 'Marked', ''], $data);
+        echo simple_table(['Staff', 'Today', 'Check-in', 'Check-out', 'Network', 'Marked', ''], $data);
         card_close();
     }]]]);
 

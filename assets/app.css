@@ -653,3 +653,5 @@ input:not([type=checkbox]):not([type=radio]):not([type=file]):focus, select:focu
 .att-lock { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--warn); background: var(--warn-50); padding: 6px 10px; border-radius: 10px; cursor: help; }
 .net-ok { color: var(--ok); font-weight: 600; } .net-bad { color: var(--warn); font-weight: 600; }
 @media (max-width: 640px) { .att-lock span { display: none; } }
+.voice-check { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 18px 4px; padding: 12px 14px; border-radius: 14px; background: var(--brand-50); border: 1px solid var(--brand-100); }
+.vc-res { font-size: 13px; color: var(--body); font-weight: 600; } .vc-res.ok { color: var(--ok); } .vc-res.warn { color: var(--warn); } .vc-res.bad { color: var(--bad); }

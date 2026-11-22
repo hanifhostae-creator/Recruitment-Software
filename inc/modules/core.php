@@ -165,6 +165,7 @@ function apply_upgrades()
 {
     apply_upgrades_v12();
     if (!setting('upgrade_v16')) { set_setting('voice_style', '0'); set_setting('upgrade_v16', now()); }
+    if (!setting('upgrade_v19')) { set_setting('voice_style', '0'); set_setting('voice_tail', '0'); set_setting('upgrade_v19', now()); }
     if (setting('upgrade_v11')) return;
     $r = row("SELECT * FROM roles WHERE name='Reception'");
     if ($r) {

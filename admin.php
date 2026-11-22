@@ -40,7 +40,7 @@ if (is_post()) {
         $vs = p('voice_style') === '' ? voice_style() : (int)p('voice_style');
         if (isset(VOICE_STYLES[$vs]) && $vs !== voice_style()) { audit('voice-style', 'settings', null, ['voice_style' => voice_style()], ['voice_style' => $vs]); set_setting('voice_style', (string)$vs); }
         $vt = p('voice_tail') ? '1' : '0';
-        if ($vt !== setting('voice_tail', '1')) { set_setting('voice_tail', $vt); audit('voice-tail', 'settings', null, null, ['voice_tail' => $vt]); }
+        if ($vt !== setting('voice_tail', '0')) { set_setting('voice_tail', $vt); audit('voice-tail', 'settings', null, null, ['voice_tail' => $vt]); }
         flash('Notification sounds and icons saved. Everyone hears the new settings from their next alert.');
         redirect('admin.php?t=sounds');
     }
@@ -149,9 +149,10 @@ if ($t === 'sounds') {
     }
     echo '</tbody></table></div>';
     $vm = json_decode((string)setting('voice_msgs', ''), true) ?: [];
+    echo '<div class="voice-check"><button type="button" class="btn" data-voice-check>' . icon('volume', 15) . ' Check this device</button><span data-voice-result class="vc-res">Press to test that the recorded voice No. 1 plays on this computer or phone.</span></div>';
     echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Voice style</h3></div><p class="muted small" style="padding:0 18px">Press <b>Listen</b> to hear each voice, choose one, then press Save. Everyone hears the chosen voice. The exact voice depends on the computer or phone; the name under each style shows the voice this device will use.</p><div class="voice-grid">';
     foreach (VOICE_STYLES as $n => $vs) echo '<label class="voice-opt' . ($n ? '' : ' rec') . '"><input type="radio" name="voice_style" value="' . $n . '"' . ($n === voice_style() ? ' checked' : '') . '><span class="vo-n">' . ($n ?: '★') . '</span><span class="vo-t"><b>' . e($vs[0]) . '</b><small>' . e($vs[1]) . '</small>' . ($n ? '<small class="vo-real" data-voice-name="' . $n . '"></small>' : '<small class="vo-real">Same sound on every computer and phone</small>') . '</span><button type="button" class="btn ghost sm" data-voice-test="' . $n . '">' . icon('volume', 14) . ' Listen</button></label>';
-    echo '</div><label class="check" style="padding:0 18px 6px;display:flex"><input type="checkbox" name="voice_tail" value="1"' . (setting('voice_tail', '1') === '1' ? ' checked' : '') . '> With the recorded voice, also read the name and position after the recording (device voice)</label>';
+    echo '</div><label class="check" style="padding:0 18px 6px;display:flex"><input type="checkbox" name="voice_tail" value="1"' . (setting('voice_tail', '0') === '1' ? ' checked' : '') . '> Also read the name and position after the recording (uses the computer\'s own voice, which sounds different; off = only the professional recording)</label>';
     echo '<div class="card-h" style="padding:16px 18px 0"><h3>' . icon('volume', 17) . ' Spoken messages</h3></div><p class="muted small" style="padding:0 18px">The words shown in the alert and read aloud. Keep the words in curly brackets — they are replaced with the real name, position or amount. Leave a box empty to use the standard text.</p>'
         . '<div class="table-wrap"><table class="table compact"><thead><tr><th>Who hears it / when</th><th>Message</th><th></th></tr></thead><tbody>';
     foreach (VOICE_MSGS as $k => $d) {
@@ -176,6 +177,11 @@ if ($t === 'office') {
         '<form method="post" action="?t=office" data-confirm="Remove ' . e($n['label']) . '? Staff on that network will no longer be able to check in (when the rule is on).">' . csrf_field() . '<input type="hidden" name="do" value="remove"><input type="hidden" name="ip" value="' . e($n['ip']) . '"><button class="btn ghost sm danger">' . icon('trash', 13) . ' Remove</button></form>'];
     card_open(icon('wifi', 17) . ' Office networks <span class="count">' . count($nets) . '</span>', '<span class="muted small">Change them any time, for example after moving office or changing the internet company.</span>');
     echo simple_table(['Name', 'Address / range', 'Added', ''], $rows, 'No office network yet. Add one above.');
+    card_close();
+    $today = rows('SELECT a.*, u.name FROM staff_attendance a JOIN users u ON u.id=a.user_id WHERE a.day=? ORDER BY a.check_in', [today()]);
+    $net = function ($ip) { if (!$ip) return '<span class="muted">—</span>'; $n = office_network_name($ip); return ($n ? badge('Office') . ' ' . e($n) : badge('Outside')) . '<br><small class="ref">' . e($ip) . '</small>'; };
+    card_open(icon('clock', 17) . ' Today\'s check-ins and networks · ' . e(dfmt(today())), '<a class="btn ghost sm" href="reception.php?t=attendance">Attendance box</a>');
+    echo simple_table(['Staff', 'Check-in', 'Network (in)', 'Check-out', 'Network (out)'], array_map(function ($a) use ($net) { return ['<b>' . e($a['name']) . '</b>', e(substr($a['check_in'], 11, 5)), $net($a['in_ip']), e($a['check_out'] ? substr($a['check_out'], 11, 5) : '—'), $net($a['out_ip'])]; }, $today), 'Nobody has checked in today yet.');
     card_close();
     $any = office_anywhere_users();
     echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>' . icon('users', 17) . ' Staff who may check in from anywhere</h3></div><p class="muted small">For field staff, drivers or people working outside. Everyone else follows the office Wi-Fi rule.</p><form method="post" action="?t=office">' . csrf_field() . '<input type="hidden" name="do" value="anywhere"><div class="check-grid">';

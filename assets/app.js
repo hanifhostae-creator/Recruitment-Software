@@ -317,16 +317,49 @@
   }
   function styleNo(n) { if (n === undefined || n === null || isNaN(n)) n = parseInt(document.body.getAttribute('data-voice') || '0', 10); return STYLES[n] ? n : 0; }
   // recorded voice: play the recording, then read the name with the device voice; falls back to the device voice
+  // one reusable player, unlocked by the first tap/click (browsers block sound that starts on its own)
+  var player = null, pending = null, hinted = false;
+  function getPlayer() { if (!player) { player = new Audio(); player.preload = 'auto'; } return player; }
+  function playClip(clip, tail, full, report) {
+    var p = getPlayer();
+    p.onended = function () { if (tail) speak(tail, true, 0); if (report) report('ok'); };
+    p.onerror = function () { if (report) report('missing'); else speak(full || tail, true); };
+    try { p.src = clip; p.currentTime = 0; } catch (e) {}
+    var pr = p.play();
+    if (pr && pr.catch) pr.catch(function (err) {
+      if (err && err.name === 'NotAllowedError') {
+        pending = [clip, tail, full];
+        if (report) report('blocked');
+        else if (!hinted) { hinted = true; toast('Tap anywhere on the page to hear voice alerts.', null, 'Voice alerts', null); }
+      } else if (report) report('missing');
+    });
+  }
+  function unlockVoice() {
+    var p = getPlayer();
+    if (pending) { var x = pending; pending = null; playClip(x[0], x[1], x[2]); return; }
+    if (p.getAttribute('data-ok')) return;
+    p.src = 'assets/voice/silence.mp3'; var pr = p.play();
+    if (pr && pr.then) pr.then(function () { p.setAttribute('data-ok', '1'); }).catch(function () {});
+  }
+  ['click', 'keydown', 'touchend'].forEach(function (ev) { document.addEventListener(ev, unlockVoice, { passive: true }); });
+  // recorded voice first; the device voice is used only when there is no recording for that alert
   function announce(clip, tail, full, force) {
     if (!force && !soundOn()) return;
     if (!clip) { speak(full || tail, force); return; }
-    try {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
-      var a = new Audio(clip); a.volume = 1;
-      a.onended = function () { if (tail) speak(tail, true, 0); };
-      var pr = a.play(); if (pr && pr.catch) pr.catch(function () { speak(full || tail, force); });
-    } catch (e) { speak(full || tail, force); }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    playClip(clip, tail, full);
   }
+  // Admin → Notification sounds: "Check this device"
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-voice-check]'); if (!b) return;
+    var out = document.querySelector('[data-voice-result]'); if (!out) return;
+    out.className = 'vc-res'; out.textContent = 'Checking…';
+    playClip('assets/voice/hr_new.mp3?check=' + Date.now(), '', '', function (r) {
+      var m = { ok: ['ok', 'The recorded voice No. 1 works on this computer.'], blocked: ['warn', 'The browser blocked the sound. Click once anywhere on the page, then press the button again.'],
+        missing: ['bad', 'The recording file was not found on the server. Deploy the latest version from GitHub in hPanel.'] }[r];
+      out.className = 'vc-res ' + m[0]; out.textContent = m[1];
+    });
+  });
   function speak(text, force, style) {
     if (!text || (!force && !soundOn()) || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
     try {

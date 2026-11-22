@@ -10,7 +10,7 @@ if (me()) {
     $uid = (int)me()['id'];
     $out['count'] = (int)val('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0', [$uid]);
     $cfg = notif_config();
-    $tailOn = setting('voice_tail', '1') === '1';
+    $tailOn = setting('voice_tail', '0') === '1';
     foreach (rows('SELECT id, kind, text, msg_key, say_tail FROM notifications WHERE user_id=? AND id>? ORDER BY id LIMIT 5', [$uid, $since]) as $n) {
         $c = $cfg[$n['kind']] ?? $cfg['system'];
         $full = trim(preg_replace('/\s*\([^)]*\)/', '', $n['text']));

@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.8.0 (22 Nov 2026)
+## Current version: 1.8.1 (22 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -148,6 +148,13 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   limited (the person pressing must be on the office network); all other work is unchanged. Addresses saved on each attendance
   row (`staff_attendance.in_ip` / `out_ip`); audit rows now use `client_ip()`.
 
+- **v1.8.1** (22 Nov): **Voice No. 1 fix** — browsers block sound that starts by itself until the person taps the page; the old code
+  then fell back to the computer voice ("same old voice"). Now one reusable audio player is unlocked by the first tap; a blocked alert
+  waits and plays on the next tap (small hint toast), and the computer voice is never used when a recording exists (only if the
+  file is missing). Reading the name after the recording (computer voice) is now OFF by default (upgrade_v19).
+  Admin → Notification sounds → **Check this device** tests playback (ok / blocked / file missing). Office network page shows
+  today's check-ins with network (office/outside + address); Reception attendance box has a Network column.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -157,6 +164,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-22 · v1.8.1 · Recorded voice plays reliably (no fallback to the computer voice), device check button, attendance network columns.
 - 2026-11-22 · v1.8.0 · Office Wi-Fi rule for check-in/check-out with admin settings, exceptions and blocked-attempt log.
 - 2026-11-22 · v1.7.0 · Premium layout (3D cards, pill tabs, sidebar, top bar), live bell menu, voice messages in chat.
 - 2026-11-16 · v1.6.1 · Recorded voice switched on for existing installs (an earlier saved device-voice choice was overriding it); alerts without their own recording start with the recorded "You have a new notification"; Print history "Printed by" column fixed.

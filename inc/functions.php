@@ -270,7 +270,7 @@ function voice_attrs($text, $key = null, $tail = null)
 {
     $clip = voice_clip($key);
     if (!$clip && !$key && ($clip = voice_clip('general'))) $tail = $text;
-    return ' data-say="' . e($text) . '"' . ($clip ? ' data-clip="' . e($clip) . '" data-tail="' . e(setting('voice_tail', '1') === '1' ? (string)$tail : '') . '"' : '');
+    return ' data-say="' . e($text) . '"' . ($clip ? ' data-clip="' . e($clip) . '" data-tail="' . e(setting('voice_tail', '0') === '1' ? (string)$tail : '') . '"' : '');
 }
 /** Text of an alert with {placeholders} filled in. */
 function voice_text($key, array $vars = [])
