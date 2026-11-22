@@ -31,9 +31,10 @@ elseif (!empty($_SESSION['portal'])) {
 if (!$allowed) { http_response_code(403); exit('You do not have access to this file.'); }
 audit('download', null, null, null, ['file' => $f]);
 $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-$types = ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'doc' => 'application/msword', 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+$types = ['pdf' => 'application/pdf', 'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'doc' => 'application/msword', 'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'webm' => 'audio/webm', 'ogg' => 'audio/ogg', 'm4a' => 'audio/mp4', 'mp3' => 'audio/mpeg'];
 header('Content-Type: ' . ($types[$ext] ?? 'application/octet-stream'));
 header('Content-Length: ' . filesize($path));
-header('Content-Disposition: ' . (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png'], true) ? 'inline' : 'attachment') . '; filename="' . basename($path) . '"');
+header('Content-Disposition: ' . (in_array($ext, ['pdf', 'jpg', 'jpeg', 'png', 'webm', 'ogg', 'm4a', 'mp3'], true) ? 'inline' : 'attachment') . '; filename="' . basename($path) . '"');
 header('X-Content-Type-Options: nosniff');
 readfile($path);

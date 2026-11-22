@@ -90,7 +90,8 @@ function chat_messages_html($cid, $viewer)
         else $name = ($viewer === 'staff' && $mine ? 'You' : user_name($m['sender_id'])) . ' · Deployment team';
         $seen = $mine ? ($m['read_at'] ? ' · Seen' : ' · Sent') : '';
         $img = $m['file'] && preg_match('/\.(jpe?g|png)$/i', $m['file']);
-        $att = $m['file'] ? ($img ? '<a class="msg-img" href="file.php?f=' . e(rawurlencode($m['file'])) . '" target="_blank" rel="noopener"><img src="file.php?f=' . e(rawurlencode($m['file'])) . '" alt="Photo" loading="lazy"></a>' : '<div>' . file_link($m['file'], 'Attachment') . '</div>') : '';
+        $aud = $m['file'] && preg_match('/\.(webm|ogg|m4a|mp3)$/i', $m['file']);
+        $att = $m['file'] ? ($aud ? '<div class="msg-voice">' . icon('mic', 16) . '<audio controls preload="metadata" src="file.php?f=' . e(rawurlencode($m['file'])) . '"></audio></div>' : ($img ? '<a class="msg-img" href="file.php?f=' . e(rawurlencode($m['file'])) . '" target="_blank" rel="noopener"><img src="file.php?f=' . e(rawurlencode($m['file'])) . '" alt="Photo" loading="lazy"></a>' : '<div>' . file_link($m['file'], 'Attachment') . '</div>')) : '';
         $h .= '<div class="msg' . ($mine ? ' me' : '') . '"><small class="who">' . e($name) . '</small>' . $att . chat_linkify($m['body']) . '<small>' . e(dtfmt($m['created_at'])) . $seen . '</small></div>';
     }
     return $h;
@@ -105,7 +106,9 @@ function chat_composer($action, $placeholder = 'Type a message…')
         . '<label class="comp-btn" title="Take a photo">' . icon('camera', 19) . '<input type="file" accept="image/*" capture="environment" data-comp-cam hidden></label>'
         . '<button type="button" class="comp-btn" title="Send my location" data-comp-loc>' . icon('map-pin', 19) . '</button>'
         . '<textarea name="body" rows="1" placeholder="' . e($placeholder) . '" maxlength="4000" data-comp-text></textarea>'
-        . '<button class="comp-send" aria-label="Send">' . icon('send', 18) . '</button></div></form>';
+        . '<button type="button" class="comp-mic" title="Record a voice message" aria-label="Record a voice message" data-comp-mic>' . icon('mic', 19) . '</button>'
+        . '<button class="comp-send" aria-label="Send">' . icon('send', 18) . '</button></div>'
+        . '<div class="comp-rec" hidden><span class="rec-dot"></span><b data-rec-time>0:00</b><span class="rec-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><button type="button" class="btn ghost sm" data-rec-cancel>' . icon('trash', 14) . ' Cancel</button><button type="button" class="btn sm" data-rec-send>' . icon('send', 14) . ' Send voice</button></div></form>';
 }
 /** WhatsApp link for a phone number (UAE local numbers 05x become 9715x). */
 function wa_link($num, $text = '')

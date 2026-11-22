@@ -64,12 +64,13 @@ function module_page($key)
     if ($ek) { if (crud_handle($ek, $base, $key, $opt)) return; }
     elseif (!empty($t['post']) && (is_post() || g('a') === 'export')) { $t['post']($base, $key); }
     page_start($m['label'], $key, false);
-    echo '<div class="page-head"><div><h1>' . icon($m['icon'], 26) . ' ' . e($m['label']) . '</h1>' . ($m['desc'] ? '<p class="muted">' . e($m['desc']) . '</p>' : '') . '</div></div>';
+    echo '<div class="page-head"><div class="ph-ico">' . icon($m['icon'], 24) . '</div><div><h1>' . e($m['label']) . '</h1>' . ($m['desc'] ? '<p class="muted">' . e($m['desc']) . '</p>' : '') . '</div></div>';
     if (count($visible) > 1) {
-        echo '<nav class="tabs" aria-label="' . e($m['label']) . ' sections">';
+        echo '<nav class="tabs pro" aria-label="' . e($m['label']) . ' sections">';
         foreach ($visible as $k => $x) {
             $lbl = is_string($x) ? entdef($x)['label'] : ($x['label'] ?? entdef($x['ent'])['label']);
-            echo '<a class="' . ($k === $tk ? 'on' : '') . '" href="' . e($m['page'] . '?t=' . $k) . '">' . e($lbl) . '</a>';
+            $ico = is_string($x) ? (entdef($x)['icon'] ?? 'grid') : ($x['icon'] ?? (!empty($x['ent']) ? (entdef($x['ent'])['icon'] ?? 'grid') : ($k === array_key_first($visible) ? 'grid' : 'layers')));
+            echo '<a class="' . ($k === $tk ? 'on' : '') . '" href="' . e($m['page'] . '?t=' . $k) . '">' . icon($ico, 16) . '<span>' . e($lbl) . '</span></a>';
         }
         echo '</nav>';
     }

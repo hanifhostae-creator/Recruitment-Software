@@ -156,6 +156,34 @@
         txt.value = (txt.value ? txt.value + '\n' : '') + 'My location: ' + link; f.submit();
       }, function () { loc.classList.remove('busy'); alert('Please allow location access in your browser, then try again.'); }, { enableHighAccuracy: true, timeout: 15000 });
     });
+    // voice message (like a phone messenger): record, then send or cancel
+    var mic = f.querySelector('[data-comp-mic]'), recBar = f.querySelector('.comp-rec'), row = f.querySelector('.comp-row');
+    if (mic && recBar) {
+      if (!window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) mic.hidden = true;
+      var rec = null, chunks = [], stream = null, t0 = 0, timer = null, sendIt = false;
+      var tEl = recBar.querySelector('[data-rec-time]');
+      function stopAll() { if (timer) clearInterval(timer); timer = null; if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; recBar.hidden = true; row.hidden = false; }
+      mic.addEventListener('click', function () {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (st) {
+          stream = st; chunks = []; sendIt = false;
+          var types = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/ogg'], mt = '';
+          for (var i = 0; i < types.length; i++) if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(types[i])) { mt = types[i]; break; }
+          rec = mt ? new MediaRecorder(st, { mimeType: mt }) : new MediaRecorder(st);
+          rec.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+          rec.onstop = function () {
+            var type = (rec.mimeType || mt || 'audio/webm').split(';')[0], ext = /mp4|m4a|aac/.test(type) ? 'm4a' : (/ogg/.test(type) ? 'ogg' : 'webm');
+            stopAll();
+            if (!sendIt || !chunks.length) return;
+            try { var dt = new DataTransfer(); dt.items.add(new File(chunks, 'voice-' + Date.now() + '.' + ext, { type: type })); file.files = dt.files; } catch (e) { alert('Voice messages are not supported in this browser.'); return; }
+            f.submit();
+          };
+          rec.start(250); t0 = Date.now(); recBar.hidden = false; row.hidden = true; tEl.textContent = '0:00';
+          timer = setInterval(function () { var s = Math.floor((Date.now() - t0) / 1000); tEl.textContent = Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); if (s >= 300) { sendIt = true; rec.stop(); } }, 250);
+        }).catch(function () { alert('Please allow the microphone in your browser, then try again.'); });
+      });
+      recBar.querySelector('[data-rec-send]').addEventListener('click', function () { sendIt = true; if (rec && rec.state !== 'inactive') rec.stop(); });
+      recBar.querySelector('[data-rec-cancel]').addEventListener('click', function () { sendIt = false; if (rec && rec.state !== 'inactive') rec.stop(); else stopAll(); });
+    }
     function grow() { txt.style.height = 'auto'; txt.style.height = Math.min(txt.scrollHeight, 140) + 'px'; }
     txt.addEventListener('input', grow);
     txt.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(min-width: 821px)').matches) { e.preventDefault(); if (txt.value.trim() || (file.files && file.files.length)) f.submit(); } });
@@ -357,6 +385,14 @@
       syncSound(); if (soundOn()) beep(true, 'chime');
     });
   });
+  // bell menu: latest notifications, refreshed live
+  var nBtn = document.querySelector('[data-notif-btn]'), nPop = document.querySelector('[data-notif-pop]');
+  function loadPop() { if (!nPop || nPop.hidden) return; fetch('notifications.php?pop=1', { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : null; }).then(function (h) { if (h !== null) nPop.querySelector('[data-np-list]').innerHTML = h; }).catch(function () {}); }
+  if (nBtn && nPop) {
+    nBtn.addEventListener('click', function (e) { e.stopPropagation(); nPop.hidden = !nPop.hidden; nBtn.setAttribute('aria-expanded', String(!nPop.hidden)); loadPop(); });
+    document.addEventListener('click', function (e) { if (!nPop.hidden && !e.target.closest('.notif-wrap')) { nPop.hidden = true; nBtn.setAttribute('aria-expanded', 'false'); } });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !nPop.hidden) { nPop.hidden = true; nBtn.focus(); } });
+  }
   var baseTitle = document.title;
   function poll() {
     if (!pollUrl || document.hidden) return;
@@ -371,6 +407,7 @@
         if (loud.length) { beep(false, loud[0].sound); if (loud[0].say || loud[0].clip) setTimeout(function () { announce(loud[0].clip, loud[0].say, loud[0].full); }, 900); }
         d.items.forEach(function (it) { if (!it.quiet) toast(it.text, it.link, it.label, it.icon, it); if (it.id > since) since = it.id; });
         if (window.rhLiveRefresh) window.rhLiveRefresh();
+        loadPop(); if (nBtn) { nBtn.classList.remove('ring'); void nBtn.offsetWidth; nBtn.classList.add('ring'); }
       }
     }).catch(function () {});
   }

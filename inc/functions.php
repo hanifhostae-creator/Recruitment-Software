@@ -157,6 +157,8 @@ function badge($text)
     return '<span class="badge b-' . $tone . '">' . e($text) . '</span>';
 }
 
+/** File types allowed in the private chat: documents, photos and voice messages. */
+const CHAT_TYPES = ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'webm', 'ogg', 'm4a', 'mp3'];
 /** Validate and store an uploaded file. Returns [relative path or null, error or null]. */
 function upload_file($field, $sub = 'files', $required = false, $types = null, $maxMb = 10)
 {
@@ -173,7 +175,8 @@ function upload_file($field, $sub = 'files', $required = false, $types = null, $
         $mime = (string)finfo_file($fi, $f['tmp_name']);
         $okMime = ['pdf' => ['application/pdf'], 'jpg' => ['image/jpeg'], 'jpeg' => ['image/jpeg'], 'png' => ['image/png'],
             'doc' => ['application/msword', 'application/x-ole-storage', 'application/CDFV2', 'application/vnd.ms-office'],
-            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip', 'application/octet-stream'], 'csv' => ['text/plain', 'text/csv']];
+            'docx' => ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/zip', 'application/octet-stream'], 'csv' => ['text/plain', 'text/csv'],
+            'webm' => ['audio/webm', 'video/webm'], 'ogg' => ['audio/ogg', 'video/ogg', 'application/ogg'], 'm4a' => ['audio/mp4', 'audio/x-m4a', 'video/mp4', 'audio/m4a'], 'mp3' => ['audio/mpeg', 'audio/mp3']];
         if (isset($okMime[$ext]) && !in_array($mime, $okMime[$ext], true)) return [null, 'The file content does not match a real ' . strtoupper($ext) . ' file.'];
     }
     $dir = ROOT . '/uploads/' . $sub;

@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.6.1 (16 Nov 2026)
+## Current version: 1.7.0 (22 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -129,6 +129,17 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
     (`assets/forms.js` + `assets/vendor/pdf-lib.min.js`, MIT licence file beside it). "Test the number position" uses no numbers.
     Reprint keeps the same numbers and is recorded with a reason. The next number can never be set below printed numbers.
 
+- **v1.7** (22 Nov, premium look + voice messages):
+  - **Premium layout** (CSS block "v1.7" at the end of `assets/app.css`): soft gradient page background, 3D layered card
+    shadows with a light top edge, card headers with icon chips, page heads with a gradient icon tile (`.ph-ico`, used by
+    `module_page()` and `page_head()`), module tabs as a segmented pill bar with icons (`.tabs.pro`, icon from the tab's entity),
+    sidebar with gold active marker and icon chips, glass top bar, gradient buttons, focus rings, table row accent.
+  - **Bell menu**: the bell opens a live panel (latest 12, unread marked, Repeat voice per item, Mark all read, View all) from
+    `notifications.php?pop=1`; refreshes and rings when a new alert arrives.
+  - **Voice messages in chat** (staff and candidate portal): mic button → record (timer + wave) → Send voice / Cancel; max 5 min.
+    Saved as webm / ogg / m4a (`CHAT_TYPES`, content checked), played with an audio player in the chat. Permissions-Policy
+    now allows microphone=(self). Attach (PDF/photo), camera and location were already there.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -138,6 +149,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-22 · v1.7.0 · Premium layout (3D cards, pill tabs, sidebar, top bar), live bell menu, voice messages in chat.
 - 2026-11-16 · v1.6.1 · Recorded voice switched on for existing installs (an earlier saved device-voice choice was overriding it); alerts without their own recording start with the recorded "You have a new notification"; Print history "Printed by" column fixed.
 - 2026-11-16 · v1.6.0 · Recorded professional voice for all alerts (owner's choice No. 1); Printable Forms with running serial numbers and print history.
 - 2026-11-16 · v1.5.1 · Ten selectable voice styles for spoken alerts with Listen buttons.

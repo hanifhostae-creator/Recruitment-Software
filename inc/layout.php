@@ -28,6 +28,7 @@ function icon($name, $size = 18)
         'bell' => '<path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
         'clock' => '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
         'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+        'mic' => '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>',
         'paperclip' => '<path d="m21 11-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4L15.8 7"/>',
         'camera' => '<path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13.5" r="3.5"/>',
         'whatsapp' => '<path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.3-1.9-1-0.9.8a4 4 0 0 1-2-2l.8-.9-1-1.9z"/>',
@@ -131,7 +132,9 @@ function page_start($title, $active = null, $showFlash = true)
         echo '</form>';
         }
         echo sound_button() . '<button class="icon-btn" data-theme-toggle aria-label="Toggle dark mode">' . icon('moon', 19) . '</button>'
-            . '<a class="icon-btn" href="notifications.php" aria-label="Notifications">' . icon('bell', 19) . '<span class="dot" data-bell-dot' . ($unread ? '' : ' hidden') . '>' . ($unread > 99 ? '99+' : $unread) . '</span></a>'
+            . '<div class="notif-wrap"><button type="button" class="icon-btn bell" data-notif-btn aria-haspopup="true" aria-expanded="false" aria-label="Notifications">' . icon('bell', 19) . '<span class="dot" data-bell-dot' . ($unread ? '' : ' hidden') . '>' . ($unread > 99 ? '99+' : $unread) . '</span></button>'
+            . '<div class="notif-pop" data-notif-pop hidden><div class="np-h"><div><b>Notifications</b><span class="live"><i></i> Live</span></div><form method="post" action="notifications.php">' . csrf_field() . '<button class="np-mark">' . icon('check', 13) . ' Mark all read</button></form></div>'
+            . '<div class="np-list" data-np-list><p class="np-empty">Loading…</p></div><a class="np-all" href="notifications.php">View all notifications ' . icon('arrow-right', 14) . '</a></div></div>'
             . '<details class="user-menu"><summary><span class="avatar">' . e(strtoupper(substr($u['name'], 0, 1))) . '</span><span class="um-n"><b>' . e($u['name']) . '</b><small>' . e($u['role_name']) . '</small></span>' . icon('chevron-down', 14) . '</summary>'
             . '<div class="um-d"><a href="mydash.php">' . icon('user', 15) . ' My Dashboard</a><a href="login.php?a=change">' . icon('lock', 15) . ' Change password</a><a href="logout.php">' . icon('logout', 15) . ' Log out</a></div></details>';
     }
@@ -154,7 +157,7 @@ function page_end()
 /** Page header with optional buttons. */
 function page_head($title, $iconName = null, $sub = '', $right = '')
 {
-    echo '<div class="page-head"><div><h1>' . ($iconName ? icon($iconName, 26) . ' ' : '') . e($title) . '</h1>' . ($sub ? '<p class="muted">' . $sub . '</p>' : '') . '</div>' . ($right ? '<div class="ph-r">' . $right . '</div>' : '') . '</div>';
+    echo '<div class="page-head">' . ($iconName ? '<div class="ph-ico">' . icon($iconName, 24) . '</div>' : '') . '<div><h1>' . e($title) . '</h1>' . ($sub ? '<p class="muted">' . $sub . '</p>' : '') . '</div>' . ($right ? '<div class="ph-r">' . $right . '</div>' : '') . '</div>';
 }
 
 /** Portal pages (candidate / client / agent): separate, simpler layout. */

@@ -92,13 +92,13 @@ if (is_post()) {
     if ($pg === 'chat') {
         $parts = chat_participants($cid);
         $body = mb_substr(p('body'), 0, 4000);
-        list($path, $err) = upload_file('file', 'chat');
+        list($path, $err) = upload_file('file', 'chat', false, CHAT_TYPES);
         if (!$parts) flash('The chat opens when your file is assigned to the deployment team.', 'bad');
         elseif ($err) flash($err, 'bad');
         elseif ($body === '' && !$path) flash('Write a message or attach a file.', 'bad');
         else {
             chat_add($cid, 'Candidate', $cid, $body, $path);
-            if ($path) ins('documents', ['ref_no' => next_number('DOC'), 'doc_type' => 'Other', 'doc_type_other' => 'Sent in chat', 'candidate_id' => $cid, 'status' => 'Received', 'file' => $path, 'created_at' => now(), 'archived' => 0]);
+            if ($path && !preg_match('/\.(webm|ogg|m4a|mp3)$/', $path)) ins('documents', ['ref_no' => next_number('DOC'), 'doc_type' => 'Other', 'doc_type_other' => 'Sent in chat', 'candidate_id' => $cid, 'status' => 'Received', 'file' => $path, 'created_at' => now(), 'archived' => 0]);
             foreach ($parts as $pid) notify_msg($pid, 'deploy_chat', ['name' => $c['full_name']], 'chat.php?c=' . $cid);
         }
         redirect('portal.php#chat');

@@ -24,7 +24,7 @@ if ($cid && is_post() && p('do') === 'sendlink') {
 if ($cid && is_post()) {
     if (!chat_can($cid)) deny('You do not have permission to open this chat. Only the assigned deployment team can, unless the Super Admin grants access.');
     $body = mb_substr(p('body'), 0, 4000);
-    list($path, $err) = upload_file('file', 'chat');
+    list($path, $err) = upload_file('file', 'chat', false, CHAT_TYPES);
     if ($err) flash($err, 'bad');
     elseif ($body === '' && !$path) flash('Write a message or attach a file.', 'bad');
     else { chat_add($cid, 'Staff', $u['id'], $body, $path); if (!chat_is_participant($cid)) audit('chat-send', 'candidates', $cid); }
