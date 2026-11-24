@@ -721,3 +721,10 @@ input.autofilled, select.autofilled, textarea.autofilled { background: color-mix
 .stats { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 .stat-v { min-width: 0; overflow-wrap: anywhere; } .stat-v.long { font-size: 18px; line-height: 1.2; }
 .stat > span:not(.stat-i) { min-width: 0; }
+/* daily reports */
+.dr-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; } .dr-head h3 { margin: 0 0 4px; display: flex; gap: 8px; align-items: center; } .dr-head .i { color: var(--brand); }
+.dr-sub { display: flex; align-items: center; gap: 8px; margin: 6px 0 10px; color: var(--ink); } .dr-sub .i { color: var(--brand); }
+.dr-nums { margin-bottom: 6px; } .dr-nums input { font-size: 18px; font-weight: 700; }
+.dr-list { display: grid; gap: 12px; } .dr-item p { margin: 8px 0 0; } .dr-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.dr-chips { margin-top: 10px; } .dr-chips .chip { font-size: 12px; } .chip.auto { background: var(--ok-50); color: var(--ok); border-color: transparent; }
+.dr-chips .chip b { margin-right: 4px; }

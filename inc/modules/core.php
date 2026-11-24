@@ -126,9 +126,9 @@ function default_roles()
         ['HR', 'Candidate entry, interviews, file decisions and own progress. No staff attendance.', ['candidates', 'inside', 'fees', 'recruitment'], ['candidates' => ['add', 'edit', 'approve', 'assign', 'export'], 'inside' => ['add', 'edit', 'approve'], 'fees' => [], 'recruitment' => ['add', 'edit', 'approve']], 0],
         ['Deployment', 'Teams, interview locations, deployment payments, final outcomes and file closure.', ['deployment', 'candidates', 'inside'], ['deployment' => ['add', 'edit', 'assign', 'export'], 'candidates' => ['edit', 'assign'], 'inside' => []], 0],
         ['Finance', 'Ledgers, receipts, reconciliation, accounting and invoices.', ['finance', 'accounting', 'invoices', 'fees', 'inside', 'reports', 'paybook', 'travel'], ['finance' => ['add', 'edit', 'finance', 'approve', 'export'], 'accounting' => ['add', 'edit', 'finance', 'export'], 'invoices' => ['add', 'edit', 'finance', 'export'], 'fees' => ['add', 'edit', 'finance', 'export'], 'inside' => ['finance', 'export'], 'paybook' => ['finance'], 'travel' => ['finance']], 0],
-        ['Marketing', 'Vacancy board, campaigns, posts, enquiries and CRM leads.', ['marketing', 'crm', 'whatsapp', 'cms', 'media'], ['marketing' => ['add', 'edit', 'export'], 'crm' => $std, 'whatsapp' => ['add', 'edit'], 'cms' => ['add', 'edit'], 'media' => ['add', 'edit']], 0],
-        ['Outside Operations', 'Client companies, demands, agents, batches, workers and outside operations.', ['outside', 'outside_ops', 'reports'], ['outside' => ['add', 'edit', 'approve', 'assign', 'export'], 'outside_ops' => ['add', 'edit', 'approve', 'assign', 'export']], 0],
-        ['Travel Team', 'Packages, enquiries, bookings and supplier payments.', ['travel'], ['travel' => ['add', 'edit', 'finance', 'export']], 0],
+        ['Marketing', 'Vacancy board, campaigns, posts, enquiries and CRM leads.', ['marketing', 'crm', 'whatsapp', 'cms', 'media', 'dailyreport'], ['dailyreport' => ['add', 'edit'], 'marketing' => ['add', 'edit', 'export'], 'crm' => $std, 'whatsapp' => ['add', 'edit'], 'cms' => ['add', 'edit'], 'media' => ['add', 'edit']], 0],
+        ['Outside Operations', 'Client companies, demands, agents, batches, workers and outside operations.', ['outside', 'outside_ops', 'reports', 'dailyreport'], ['outside' => ['add', 'edit', 'approve', 'assign', 'export'], 'outside_ops' => ['add', 'edit', 'approve', 'assign', 'export'], 'dailyreport' => ['add', 'edit']], 0],
+        ['Travel Team', 'Packages, enquiries, bookings and supplier payments.', ['travel', 'dailyreport'], ['travel' => ['add', 'edit', 'finance', 'export'], 'dailyreport' => ['add', 'edit']], 0],
         ['IT / Digital', 'Service catalogue, projects, milestones, tasks, change requests and tickets.', ['it', 'projects', 'support', 'kb'], ['it' => ['add', 'edit', 'assign', 'export'], 'projects' => ['add', 'edit', 'assign'], 'support' => ['add', 'edit'], 'kb' => ['add', 'edit']], 0],
     ];
 }
@@ -166,6 +166,16 @@ function apply_upgrades()
     apply_upgrades_v12();
     if (!setting('upgrade_v16')) { set_setting('voice_style', '0'); set_setting('upgrade_v16', now()); }
     if (!setting('upgrade_v19')) { set_setting('voice_style', '0'); set_setting('voice_tail', '0'); set_setting('upgrade_v19', now()); }
+    if (!setting('upgrade_v21')) {
+        // v1.12: Travel, Marketing and Outside Operations roles get Daily Reports
+        foreach (rows("SELECT * FROM roles WHERE name LIKE 'Travel%' OR name LIKE 'Marketing%' OR name LIKE 'Outside%'") as $r) {
+            $m = json_decode($r['modules'], true) ?: []; $a = json_decode($r['actions'], true) ?: [];
+            if (!in_array('dailyreport', $m, true)) $m[] = 'dailyreport';
+            $a['dailyreport'] = array_values(array_unique(array_merge($a['dailyreport'] ?? [], ['add', 'edit'])));
+            upd('roles', $r['id'], ['modules' => json_encode(array_values($m)), 'actions' => json_encode((object)$a)]);
+        }
+        set_setting('upgrade_v21', now());
+    }
     if (!setting('upgrade_v20')) { set_setting('voice_tail', '1'); set_setting('upgrade_v20', now()); }
     if (setting('upgrade_v11')) return;
     $r = row("SELECT * FROM roles WHERE name='Reception'");

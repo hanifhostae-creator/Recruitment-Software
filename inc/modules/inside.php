@@ -818,6 +818,10 @@ function staff_work_panel()
         $t[] = $tile('Interviews waiting for a reply', (int)val("SELECT COUNT(*) FROM interview_locations l JOIN candidates c ON c.id=l.candidate_id WHERE l.response='Pending' AND l.archived=0 AND $w", $p), 'The candidate has not answered yet', 'map-pin', 'amber', 'deployment.php?t=locations');
         $t[] = $tile('Selected this month', (int)val("SELECT COUNT(*) FROM stage_history h JOIN candidates c ON c.id=h.entity_id WHERE h.entity='candidates' AND h.to_stage='Selected' AND h.at>=? AND $w", array_merge([date('Y-m-01')], $p)), 'Well done', 'award', 'green', 'deployment.php?t=pipeline');
     }
+    if (!is_super() && function_exists('dr_team') && can('dailyreport') && in_array(dr_team(), ['Travel', 'Marketing', 'Outside'], true)) {
+        $done = (bool)val('SELECT id FROM daily_reports WHERE user_id=? AND report_date=? AND archived=0', [$uid, today()]);
+        $t[] = $tile($done ? 'Daily report submitted' : 'Submit today\'s report', null, $done ? 'You can still update it today' : 'What you did today, numbers and plan for tomorrow', 'clipboard', $done ? 'green' : 'amber', 'dailyreport.php');
+    }
     if (!$t) return;
     echo '<div class="work-head"><h3>' . icon('zap', 17) . ' ' . (is_super() ? 'Today at a glance' : 'Your work today') . '</h3><span class="muted small">Press a box to start</span></div><div class="work-tiles">';
     foreach ($t as $i => $x) echo '<a class="wtile t-' . e($x['tone']) . ($x['action'] ? ' act' : '') . ($x['n'] ? ' has' : '') . '" style="--d:' . ($i * 60) . 'ms" href="' . e($x['href']) . '"><span class="wt-ico">' . icon($x['icon'], 24) . '</span><span class="wt-b">'

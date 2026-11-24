@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.11.0 (24 Nov 2026)
+## Current version: 1.12.0 (25 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -207,6 +207,19 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
     **day by day**, lead stages, top nationalities, follow-ups list, **Excel export** (bookings + leads).
   - Travel Team home has its own "Your work today" tiles. Long money values in stat boxes use a smaller font.
 
+- **v1.12** (25 Nov): **Daily Reports** (`dailyreport.php`, `inc/modules/dailyreport.php`, area Home):
+  - Team comes from the staff member's team (Travel & Tour / Marketing / Outside Hiring), else the role name (`dr_team()`).
+  - **My daily report** (today or up to 7 days back, one per person per day, can be updated): team fields — Travel: customers
+    contacted, follow-ups, met in office; Marketing: posts, comments replied, messages replied, leads, platforms, tasks done;
+    Outside Hiring: candidates dealt with, visas received, agents in discussion, documents in process, interviews — plus
+    what I did, plan for tomorrow, problems. **Counted automatically** (`dr_auto()`): Travel new leads, deals, conversion, sales,
+    to pay vendors, profit, open leads; Marketing posts recorded, enquiries/leads entered, candidates from their posts; Outside
+    candidates submitted, moved to visa/ready, joined, agent conversations, documents added, workers in documentation/visa.
+    Month progress for the person under the form. Saving speaks "Your daily report has been saved".
+  - **Team reports** (perm approve / Super Admin): filters (dates, team, staff), "not submitted today" list, Excel export.
+  - **Progress**: per team, per person for a month: reports, typed totals and automatic totals.
+  - Roles Travel Team, Marketing, Outside Operations get the module (upgrade_v21). Home tile "Submit today's report".
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -216,6 +229,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-25 · v1.12.0 · Daily reports for Travel, Marketing and Outside Hiring with automatic numbers, team view, progress and Excel.
 - 2026-11-24 · v1.11.0 · Travel & Tour: leads pipeline, deal-to-booking, costs and margin, daily/service reports, Excel.
 - 2026-11-22 · v1.10.1 · Attendance testing mode and admin reset of today's check-in.
 - 2026-11-22 · v1.10.0 · Check-in greeting with name + repeat, spoken work confirmations, Super Admin glance tiles, smooth stat boxes.
