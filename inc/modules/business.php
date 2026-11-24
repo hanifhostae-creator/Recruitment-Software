@@ -266,35 +266,180 @@ mod('it', ['label' => 'IT & Digital', 'icon' => 'code', 'area' => 'Operations', 
         'services' => 'it_services', 'projects' => 'it_projects', 'tasks' => 'it_tasks', 'changes' => 'change_requests', 'approvals' => 'client_approvals', 'tickets' => 'support_tickets', 'content' => 'content_calendar', 'bugs' => ['label' => 'Bugs', 'ent' => 'biz_bugs', 'nohome' => true]]]);
 
 // ================================================================ Travel & Tour
+opt_defaults('travel_services', ['Air ticket', 'Umrah package', 'Hajj package', 'UAE visit visa', 'Visa change / extension', 'Inside Dubai tour', 'Desert safari', 'City tour', 'Holiday package', 'Hotel booking', 'Airport transfer', 'Travel insurance']);
+opt_defaults('travel_lost_reasons', ['Price too high', 'Booked elsewhere', 'No reply', 'Travel postponed', 'Visa refused', 'Not interested']);
+const TRAVEL_LEAD_STAGES = 'New|Contacted|Under Discussion|Quoted|Booked|Lost';
 ent('travel_packages', ['label' => 'Packages', 'one' => 'Package', 'prefix' => 'PKG', 'title' => 'name', 'icon' => 'globe',
-    'fields' => ['name' => ['Package', 'text', 'req'], 'destination' => ['Destination', 'text', 'req'], 'days' => ['Days', 'int'], 'price' => ['Selling price (per person)', 'money', 'req'], 'cost' => ['Supplier cost (per person)', 'money'], 'inclusions' => ['Inclusions', 'textarea'], 'status' => $S('Active|Inactive')],
-    'list' => ['ref_no', 'name', 'destination', 'days', 'price', 'status'], 'cols' => ['Margin' => function ($r) { return $r['price'] ? round(($r['price'] - $r['cost']) / $r['price'] * 100) . '%' : ''; }]]);
-ent('travel_enquiries', ['notify_new' => ['Travel Team', 'lead'], 'label' => 'Travel Enquiries', 'one' => 'Travel enquiry', 'prefix' => 'TEQ', 'title' => 'name', 'icon' => 'phone',
-    'fields' => ['name' => ['Customer', 'text', 'req'], 'phone' => ['Phone', 'phone', 'req'], 'email' => ['Email', 'email'], 'package_id' => ['Package', 'ref:travel_packages'], 'destination' => ['Destination', 'text'], 'travel_date' => ['Travel date', 'date'], 'pax' => ['Travellers', 'int', 'default' => 1], 'source' => ['Source', 'opt:sources'], 'status' => $S('New|Quoted|Booked|Lost'), 'assigned_to' => ['Assigned to', 'user'], 'notes' => ['Notes', 'textarea']],
-    'list' => ['ref_no', 'name', 'destination', 'travel_date', 'pax', 'status', 'assigned_to'], 'filters' => ['status', 'assigned_to']]);
+    'fields' => ['name' => ['Package', 'text', 'req'], 'service' => ['Service', 'opt:travel_services', 'req'], 'destination' => ['Destination', 'text', 'req'], 'days' => ['Days', 'int'],
+        'price' => ['Selling price (per person)', 'money', 'req'], 'cost' => ['Our cost (per person)', 'money'], 'valid_until' => ['Valid until', 'date'], 'inclusions' => ['Inclusions', 'textarea'], 'status' => $S('Active|Inactive')],
+    'list' => ['ref_no', 'name', 'service', 'destination', 'days', 'price', 'status'], 'filters' => ['service', 'status'],
+    'cols' => ['Margin' => function ($r) { return $r['price'] ? money($r['price'] - $r['cost']) . ' · ' . round(($r['price'] - $r['cost']) / $r['price'] * 100) . '%' : ''; }]]);
+ent('travel_enquiries', ['notify_new' => ['Travel Team', 'lead'], 'label' => 'Leads', 'one' => 'Lead', 'prefix' => 'TEQ', 'title' => 'name', 'icon' => 'phone', 'dupe' => ['phone'],
+    'fields' => ['name' => ['Customer name', 'text', 'req'], 'phone' => ['Phone', 'phone', 'req'], 'whatsapp' => ['WhatsApp', 'phone'], 'email' => ['Email', 'email', 'more'],
+        'nationality' => ['Nationality', 'opt:nationalities'], 'service' => ['Service wanted', 'opt:travel_services', 'req'], 'package_id' => ['Package', 'ref:travel_packages'],
+        'purpose' => ['Purpose of travel', 'text'], 'destination' => ['Destination / route', 'text'], 'travel_date' => ['Travel date', 'date'], 'return_date' => ['Return date', 'date', 'more'],
+        'pax' => ['Travellers', 'int', 'default' => 1], 'budget' => ['Customer budget', 'money', 'more'], 'source' => ['Source', 'opt:sources'],
+        'status' => ['Stage', 'enum:' . TRAVEL_LEAD_STAGES, 'default' => 'New'], 'follow_up' => ['Next follow-up', 'date'], 'assigned_to' => ['Handled by', 'user'],
+        'lost_reason' => ['Lost reason', 'opt:travel_lost_reasons', 'more'], 'notes' => ['Notes', 'textarea', 'more']],
+    'list' => ['ref_no', 'name', 'phone', 'service', 'destination', 'status', 'follow_up', 'assigned_to'], 'filters' => ['status', 'service', 'assigned_to', 'nationality'],
+    'before_save' => function (&$d, $old) { if (!$old && empty($d['assigned_to']) && me()) $d['assigned_to'] = me()['id']; if (($d['status'] ?? '') === 'Lost' && empty($d['lost_reason'])) return 'Choose the lost reason.'; return null; },
+    'cols' => ['Follow-up' => function ($r) { return !in_array($r['status'], ['Booked', 'Lost'], true) && $r['follow_up'] && $r['follow_up'] <= today() ? badge($r['follow_up'] < today() ? 'Overdue' : 'Today') : ''; }],
+    'view' => function ($r) { travel_lead_card($r); },
+    'actions' => [
+        'stage' => ['label' => 'Update stage', 'icon' => 'refresh', 'perm' => 'edit', 'show' => function ($r) { return !in_array($r['status'], ['Booked', 'Lost'], true); },
+            'form' => function ($r) {
+                echo '<div class="grid-form"><div class="fld"><label>Stage *</label><select name="status" required>';
+                foreach (['New', 'Contacted', 'Under Discussion', 'Quoted'] as $st) echo '<option' . ($r['status'] === $st ? ' selected' : '') . '>' . $st . '</option>';
+                echo '</select></div><div class="fld"><label>Next follow-up</label><input type="date" name="follow_up" value="' . e($r['follow_up']) . '"></div><div class="fld wide"><label>What happened</label><input name="note" placeholder="For example: sent the Umrah price on WhatsApp"></div></div><div class="form-actions"><button class="btn">Save</button></div>';
+            },
+            'do' => function ($r) {
+                $st = p('status'); if (!in_array($st, ['New', 'Contacted', 'Under Discussion', 'Quoted'], true)) return 'Choose a stage.';
+                $notes = trim(($r['notes'] ? $r['notes'] . "\n" : '') . (p('note') ? date('d M H:i') . ' — ' . p('note') : ''));
+                upd('travel_enquiries', $r['id'], ['status' => $st, 'follow_up' => p('follow_up') ?: null, 'notes' => $notes ?: null, 'updated_at' => now(), 'updated_by' => me()['id']]);
+                audit('stage', 'travel_enquiries', $r['id'], ['status' => $r['status']], ['status' => $st], p('note') ?: null);
+                return ['msg' => 'Lead updated: ' . $st . '.'];
+            }],
+        'book' => ['label' => 'Deal done — create booking', 'icon' => 'check-circle', 'perm' => 'add', 'show' => function ($r) { return !in_array($r['status'], ['Booked', 'Lost'], true); },
+            'form' => function ($r) {
+                $pk = $r['package_id'] ? row('SELECT * FROM travel_packages WHERE id=?', [$r['package_id']]) : null; $pax = max(1, (int)$r['pax']);
+                echo '<p class="muted">The customer agreed. Enter the final price and our cost — the margin is worked out for you. Payments are recorded on the booking.</p><div class="grid-form">'
+                    . '<div class="fld"><label>Total selling price (customer pays) *</label><input type="number" step="0.01" min="0" name="sale_price" required data-pay-total value="' . e($pk ? $pk['price'] * $pax : '') . '"></div>'
+                    . '<div class="fld"><label>Supplier / airline / hotel cost *</label><input type="number" step="0.01" min="0" name="supplier_cost" required data-pay-paid value="' . e($pk ? $pk['cost'] * $pax : '') . '"></div>'
+                    . '<div class="fld"><label>Margin (before other costs)</label><div class="ro big" data-pay-left>—</div></div>'
+                    . '<div class="fld"><label>Supplier</label><input name="supplier" placeholder="Airline, hotel, agency…"></div>'
+                    . '<div class="fld"><label>Travel date *</label><input type="date" name="travel_date" required value="' . e($r['travel_date']) . '"></div><div class="fld"><label>Booking / PNR reference</label><input name="booking_ref"></div>'
+                    . '<div class="fld"><label>Amount received now</label><input type="number" step="0.01" min="0" name="paid_now"></div><div class="fld"><label>Payment method</label><select name="method">' . implode('', array_map(function ($m) { return '<option>' . e($m) . '</option>'; }, options('payment_methods'))) . '</select></div></div>'
+                    . '<div class="form-actions"><button class="btn big">' . icon('check', 16) . ' Create booking</button></div>';
+            },
+            'do' => function ($r) {
+                $sale = (float)p('sale_price'); $cost = (float)p('supplier_cost'); $paid = (float)p('paid_now');
+                if ($sale <= 0) return 'Enter the selling price.'; if (!p('travel_date')) return 'Choose the travel date.'; if ($paid > $sale) return 'The amount received is more than the selling price.';
+                $id = ins('travel_bookings', ['ref_no' => next_number('TB'), 'customer' => $r['name'], 'phone' => $r['phone'], 'whatsapp' => $r['whatsapp'], 'nationality' => $r['nationality'], 'service' => $r['service'], 'package_id' => $r['package_id'], 'enquiry_id' => $r['id'],
+                    'purpose' => $r['purpose'], 'destination' => $r['destination'], 'travel_date' => p('travel_date'), 'return_date' => $r['return_date'], 'pax' => max(1, (int)$r['pax']), 'booking_ref' => p('booking_ref') ?: null,
+                    'sale_price' => $sale, 'supplier' => p('supplier') ?: null, 'supplier_cost' => $cost, 'other_costs' => 0, 'status' => 'Confirmed', 'handled_by' => $r['assigned_to'] ?: me()['id'], 'created_by' => me()['id'], 'created_at' => now(), 'archived' => 0]);
+                upd('travel_enquiries', $r['id'], ['status' => 'Booked', 'updated_at' => now()]);
+                audit('create', 'travel_bookings', $id, null, ['from_lead' => $r['ref_no'], 'sale' => $sale, 'cost' => $cost]);
+                if ($paid > 0) record_payment('travel_bookings', $id, $paid, ['method' => p('method') ?: 'Cash', 'pay_type' => 'Client Payment', 'party' => $r['name']]);
+                notify_super(voice_text('admin_deal', $dv = ['name' => $r['name'] . ' (' . $r['service'] . ')', 'amount' => money($sale)]), ent_url('travel_bookings', $id), 'payment', 'admin_deal', $dv);
+                return ['msg' => 'Deal done. Booking created; margin ' . money($sale - $cost) . '.', 'go' => ent_url('travel_bookings', $id)];
+            }],
+        'lost' => ['label' => 'Mark lost', 'icon' => 'x', 'perm' => 'edit', 'show' => function ($r) { return !in_array($r['status'], ['Booked', 'Lost'], true); },
+            'form' => function ($r) { echo '<div class="grid-form"><div class="fld"><label>Reason *</label><select name="lost_reason" required><option value="">— Select —</option>' . implode('', array_map(function ($o) { return '<option>' . e($o) . '</option>'; }, options('travel_lost_reasons'))) . '</select></div><div class="fld"><label>Note</label><input name="note"></div></div><div class="form-actions"><button class="btn danger">Mark lost</button></div>'; },
+            'do' => function ($r) { if (!p('lost_reason')) return 'Choose the reason.'; upd('travel_enquiries', $r['id'], ['status' => 'Lost', 'lost_reason' => p('lost_reason'), 'updated_at' => now()]); audit('stage', 'travel_enquiries', $r['id'], ['status' => $r['status']], ['status' => 'Lost'], p('lost_reason') . (p('note') ? ' — ' . p('note') : '')); return ['msg' => 'Lead marked lost.']; }],
+    ]]);
 ent('travel_quotations', ['label' => 'Quotations', 'one' => 'Quotation', 'prefix' => 'TQ', 'icon' => 'file-text',
-    'fields' => ['enquiry_id' => ['Enquiry', 'ref:travel_enquiries', 'req'], 'package_id' => ['Package', 'ref:travel_packages'], 'amount' => ['Quoted amount', 'money', 'req'], 'valid_until' => ['Valid until', 'date'], 'status' => $S('Sent|Accepted|Rejected|Expired'), 'details' => ['Details', 'textarea']],
-    'list' => ['ref_no', 'enquiry_id', 'package_id', 'amount', 'valid_until', 'status']]);
+    'fields' => ['enquiry_id' => ['Lead', 'ref:travel_enquiries', 'req'], 'package_id' => ['Package', 'ref:travel_packages'], 'amount' => ['Quoted amount', 'money', 'req'], 'valid_until' => ['Valid until', 'date'], 'status' => $S('Sent|Accepted|Rejected|Expired'), 'details' => ['Details', 'textarea']],
+    'list' => ['ref_no', 'enquiry_id', 'package_id', 'amount', 'valid_until', 'status'],
+    'after_save' => function ($id, $d, $old) { if (!$old && !empty($d['enquiry_id'])) { $st = val('SELECT status FROM travel_enquiries WHERE id=?', [$d['enquiry_id']]); if (in_array($st, ['New', 'Contacted', 'Under Discussion'], true)) q("UPDATE travel_enquiries SET status='Quoted', updated_at=? WHERE id=?", [now(), $d['enquiry_id']]); } }]);
 ent('travel_bookings', ['notify_new' => [null], 'label' => 'Bookings', 'one' => 'Booking', 'prefix' => 'TB', 'title' => 'customer', 'title_ref' => true, 'icon' => 'plane', 'financial' => true,
-    'fields' => ['customer' => ['Customer', 'text', 'req'], 'phone' => ['Phone', 'phone'], 'package_id' => ['Package', 'ref:travel_packages'], 'enquiry_id' => ['Enquiry', 'ref:travel_enquiries'], 'travel_date' => ['Travel date', 'date', 'req'], 'pax' => ['Travellers', 'int', 'default' => 1],
-        'sale_price' => ['Total selling price', 'money', 'req'], 'supplier' => ['Supplier', 'text'], 'supplier_cost' => ['Total supplier cost', 'money'], 'status' => $S('Confirmed|Travelled|Cancelled')],
-    'list' => ['ref_no', 'customer', 'package_id', 'travel_date', 'pax', 'sale_price', 'status'], 'filters' => ['status'],
-    'cols' => ['Customer outstanding' => function ($r) { return money($r['sale_price'] - paid_total('travel_bookings', $r['id'])); }],
-    'view' => function ($r) { $cp = paid_total('travel_bookings', $r['id']); $sp = paid_total('travel_bookings', $r['id'], 'out'); $profit = $r['sale_price'] - $r['supplier_cost']; echo '<div class="kv" style="margin:0 0 16px"><div><span>Selling price</span><b>' . money($r['sale_price']) . '</b></div><div class="good"><span>Customer paid</span><b>' . money($cp) . '</b></div><div class="' . ($r['sale_price'] - $cp > 0 ? 'bad' : '') . '"><span>Customer outstanding</span><b>' . money($r['sale_price'] - $cp) . '</b></div><div><span>Supplier cost</span><b>' . money($r['supplier_cost']) . '</b></div><div><span>Supplier paid</span><b>' . money($sp) . '</b></div><div class="warn"><span>Payable to supplier</span><b>' . money($r['supplier_cost'] - $sp) . '</b></div><div class="hl"><span>Profit · margin</span><b>' . money($profit) . ' · ' . ($r['sale_price'] ? round($profit / $r['sale_price'] * 100) : 0) . '%</b></div></div>'; },
+    'fields' => ['customer' => ['Customer', 'text', 'req'], 'phone' => ['Phone', 'phone'], 'whatsapp' => ['WhatsApp', 'phone', 'more'], 'nationality' => ['Nationality', 'opt:nationalities'],
+        'service' => ['Service', 'opt:travel_services', 'req'], 'package_id' => ['Package', 'ref:travel_packages'], 'enquiry_id' => ['Lead', 'ref:travel_enquiries', 'norel' => true],
+        'purpose' => ['Purpose of travel', 'text', 'more'], 'destination' => ['Destination / route', 'text'], 'travel_date' => ['Travel date', 'date', 'req'], 'return_date' => ['Return date', 'date', 'more'], 'pax' => ['Travellers', 'int', 'default' => 1],
+        'booking_ref' => ['Booking / PNR reference', 'text'], 'details' => ['Flight / hotel details', 'textarea', 'more'],
+        'sale_price' => ['Total selling price', 'money', 'req'], 'supplier' => ['Supplier', 'text'], 'supplier_cost' => ['Supplier cost', 'money'], 'other_costs' => ['Other costs (visa fees, transport…)', 'money'],
+        'handled_by' => ['Handled by', 'user'], 'status' => $S('Confirmed|In Progress|Completed|Travelled|Cancelled')],
+    'list' => ['ref_no', 'customer', 'service', 'destination', 'travel_date', 'sale_price', 'status'], 'filters' => ['status', 'service', 'handled_by'],
+    'before_save' => function (&$d, $old) { if (!$old && empty($d['handled_by']) && me()) $d['handled_by'] = me()['id']; return null; },
+    'cols' => ['Margin' => function ($r) { $m = $r['sale_price'] - $r['supplier_cost'] - $r['other_costs']; return '<b style="color:' . ($m >= 0 ? 'var(--ok)' : 'var(--bad)') . '">' . money($m) . '</b>'; }, 'Customer owes' => function ($r) { $o = $r['sale_price'] - paid_total('travel_bookings', $r['id']); return $o > 0.004 ? '<span style="color:var(--bad)">' . money($o) . '</span>' : badge('Paid'); }],
+    'view' => function ($r) { travel_booking_card($r); },
     'view_after' => function ($r, $mod, $base) { payments_panel('travel_bookings', $r['id'], $mod, $base); },
-    'actions' => ['pay' => pay_action('travel_bookings', 'Customer payment', 'add'), 'supplier' => pay_action('travel_bookings', 'Supplier payment', 'finance', null, 'out')]]);
+    'actions' => ['pay' => pay_action('travel_bookings', 'Customer payment', 'add'), 'supplier' => pay_action('travel_bookings', 'Pay supplier / expense', 'finance', null, 'out')]]);
 ent('travel_support', ['label' => 'Support Cases', 'one' => 'Support case', 'title' => 'issue', 'icon' => 'headphones', 'fields' => ['booking_id' => ['Booking', 'ref:travel_bookings', 'req'], 'issue' => ['Issue', 'text', 'req'], 'status' => $S('Open|Resolved'), 'details' => ['Details', 'textarea']], 'list' => ['booking_id', 'issue', 'status', 'created_at']]);
-mod('travel', ['label' => 'Travel & Tour', 'icon' => 'plane', 'area' => 'Travel & Services', 'order' => 1, 'desc' => 'Packages, enquiries, quotations, bookings with profit and margin, supplier payments and support cases. Separate from hiring travel.',
-    'tabs' => ['dash' => ['label' => 'Travel dashboard', 'fn' => function ($base, $mod) {
-        render_widgets(['travel']);
-        $b = rows("SELECT * FROM travel_bookings WHERE archived=0 AND status<>'Cancelled'");
-        $sale = array_sum(array_column($b, 'sale_price')); $cost = array_sum(array_column($b, 'supplier_cost')); $cp = 0; $sp = 0;
-        foreach ($b as $x) { $cp += paid_total('travel_bookings', $x['id']); $sp += paid_total('travel_bookings', $x['id'], 'out'); }
-        echo '<div class="kv" style="margin:0 0 16px"><div><span>Bookings value</span><b>' . money($sale) . '</b></div><div class="good"><span>Customer paid</span><b>' . money($cp) . '</b></div><div class="bad"><span>Customer outstanding</span><b>' . money($sale - $cp) . '</b></div><div><span>Supplier paid</span><b>' . money($sp) . '</b></div><div class="warn"><span>Supplier payable</span><b>' . money($cost - $sp) . '</b></div><div class="hl"><span>Profit · margin</span><b>' . money($sale - $cost) . ' · ' . ($sale ? round(($sale - $cost) / $sale * 100) : 0) . '%</b></div></div>';
-        $dest = []; foreach (rows('SELECT p.destination d, COUNT(*) n FROM travel_bookings b LEFT JOIN travel_packages p ON p.id=b.package_id WHERE b.archived=0 GROUP BY d') as $r) $dest[$r['d'] ?: 'Custom'] = (int)$r['n'];
-        $enq = []; foreach (rows('SELECT status k, COUNT(*) n FROM travel_enquiries WHERE archived=0 GROUP BY k') as $r) $enq[$r['k']] = (int)$r['n'];
-        echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>Bookings by destination</h3></div>' . chart_bars($dest) . '</div><div class="card"><div class="card-h"><h3>Enquiries by status</h3></div>' . chart_donut($enq) . '</div></div>';
-    }], 'packages' => 'travel_packages', 'enquiries' => 'travel_enquiries', 'quotations' => 'travel_quotations', 'bookings' => 'travel_bookings', 'support' => 'travel_support']]);
+
+/** Money of one booking: agreed, received, paid out, margin. */
+function travel_money($b)
+{
+    $in = paid_total('travel_bookings', $b['id']); $out = paid_total('travel_bookings', $b['id'], 'out');
+    $cost = (float)$b['supplier_cost'] + (float)$b['other_costs'];
+    return ['sale' => (float)$b['sale_price'], 'cost' => $cost, 'margin' => (float)$b['sale_price'] - $cost, 'in' => $in, 'out' => $out, 'owes' => (float)$b['sale_price'] - $in, 'payable' => $cost - $out, 'cash' => $in - $out];
+}
+function travel_booking_card($r)
+{
+    $m = travel_money($r); $pct = $m['sale'] ? round($m['margin'] / $m['sale'] * 100) : 0;
+    echo '<div class="stats">' . stat_tile('Selling price', money($m['sale']), 'tag', 'brand') . stat_tile('Our total cost', money($m['cost']), 'card', 'warn') . stat_tile('Margin · ' . $pct . '%', money($m['margin']), 'award', $m['margin'] >= 0 ? 'ok' : 'bad') . '</div>';
+    echo '<div class="kv" style="margin:0 0 16px"><div class="good"><span>Received from customer</span><b>' . money($m['in']) . '</b></div><div class="' . ($m['owes'] > 0.004 ? 'bad' : 'good') . '"><span>Customer still owes</span><b>' . money(max(0, $m['owes'])) . '</b></div>'
+        . '<div><span>Paid to supplier / expenses</span><b>' . money($m['out']) . '</b></div><div class="' . ($m['payable'] > 0.004 ? 'warn' : '') . '"><span>Still to pay supplier</span><b>' . money(max(0, $m['payable'])) . '</b></div>'
+        . '<div class="hl"><span>Cash margin so far</span><b>' . money($m['cash']) . '</b></div><div><span>Service</span><b>' . e($r['service'] ?: '—') . '</b></div></div>';
+}
+function travel_lead_card($r)
+{
+    $steps = ['New', 'Contacted', 'Under Discussion', 'Quoted', 'Booked']; $ci = array_search($r['status'], $steps, true);
+    echo '<div class="card"><div class="journey">';
+    foreach ($steps as $i => $st) echo '<div class="jstep' . ($ci !== false && $i <= $ci ? ' done' : '') . ($i === $ci ? ' cur' : '') . '"><i>' . ($ci !== false && $i <= $ci ? '✓' : $i + 1) . '</i>' . e($st) . '</div>';
+    echo '</div>' . ($r['status'] === 'Lost' ? '<div class="alert bad">Lost · ' . e($r['lost_reason']) . '</div>' : '');
+    $wa = function_exists('wa_link') ? wa_link($r['whatsapp'] ?: $r['phone']) : '';
+    echo '<div class="action-bar" style="margin-top:12px">' . ($wa ? '<a class="btn wa sm" target="_blank" rel="noopener" href="' . e($wa) . '">' . icon('whatsapp', 14) . ' WhatsApp</a>' : '') . '<a class="btn ghost sm" href="tel:' . e(preg_replace('/[^\d+]/', '', $r['phone'])) . '">' . icon('phone', 14) . ' Call</a>'
+        . ($r['follow_up'] ? '<span class="muted small">Next follow-up: <b>' . e(dfmt($r['follow_up'])) . '</b></span>' : '') . '</div></div>';
+    $bk = rows('SELECT * FROM travel_bookings WHERE enquiry_id=? AND archived=0', [$r['id']]);
+    foreach ($bk as $b) { $m = travel_money($b); echo '<div class="alert ok">' . icon('check-circle', 15) . ' Booked: <a href="' . e(ent_url('travel_bookings', $b['id'])) . '"><b>' . e($b['ref_no']) . '</b></a> · ' . money($m['sale']) . ' · margin ' . money($m['margin']) . '</div>'; }
+}
+function travel_period()
+{
+    $from = (string)g('from', date('Y-m-01')); $to = (string)g('to', today());
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) $from = date('Y-m-01'); if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) $to = today();
+    return [$from, $to];
+}
+/** Figures for leads and bookings in a period (by lead date and booking date). */
+function travel_figures($from, $to)
+{
+    $leads = rows('SELECT * FROM travel_enquiries WHERE archived=0 AND date(created_at) BETWEEN ? AND ?', [$from, $to]);
+    $books = rows("SELECT * FROM travel_bookings WHERE archived=0 AND status<>'Cancelled' AND date(created_at) BETWEEN ? AND ?", [$from, $to]);
+    $f = ['leads' => count($leads), 'booked' => count($books), 'lost' => 0, 'open' => 0, 'sale' => 0, 'cost' => 0, 'margin' => 0, 'in' => 0, 'out' => 0, 'service' => [], 'nat' => [], 'stage' => [], 'days' => []];
+    foreach ($leads as $l) {
+        $f['stage'][$l['status']] = ($f['stage'][$l['status']] ?? 0) + 1;
+        if ($l['status'] === 'Lost') $f['lost']++; elseif ($l['status'] !== 'Booked') $f['open']++;
+        $sv = $l['service'] ?: 'Other'; $f['service'][$sv]['leads'] = ($f['service'][$sv]['leads'] ?? 0) + 1;
+        if ($l['nationality']) $f['nat'][$l['nationality']] = ($f['nat'][$l['nationality']] ?? 0) + 1;
+        $d = substr($l['created_at'], 0, 10); $f['days'][$d]['leads'] = ($f['days'][$d]['leads'] ?? 0) + 1;
+    }
+    foreach ($books as $b) {
+        $m = travel_money($b); $sv = $b['service'] ?: 'Other'; $d = substr($b['created_at'], 0, 10);
+        foreach (['sale', 'cost', 'margin', 'in', 'out'] as $k) $f[$k] += $m[$k];
+        foreach (['sale', 'cost', 'margin'] as $k) { $f['service'][$sv][$k] = ($f['service'][$sv][$k] ?? 0) + $m[$k]; $f['days'][$d][$k] = ($f['days'][$d][$k] ?? 0) + $m[$k]; }
+        $f['service'][$sv]['booked'] = ($f['service'][$sv]['booked'] ?? 0) + 1; $f['days'][$d]['booked'] = ($f['days'][$d]['booked'] ?? 0) + 1;
+    }
+    ksort($f['days']); arsort($f['nat']);
+    $f['conv'] = $f['leads'] ? round($f['booked'] / $f['leads'] * 100) : 0;
+    return $f;
+}
+function travel_dashboard($base)
+{
+    list($from, $to) = travel_period(); $f = travel_figures($from, $to); $t = travel_figures(today(), today());
+    $owes = 0; $payable = 0;
+    foreach (rows("SELECT * FROM travel_bookings WHERE archived=0 AND status<>'Cancelled'") as $b) { $m = travel_money($b); $owes += max(0, $m['owes']); $payable += max(0, $m['payable']); }
+    $due = rows("SELECT * FROM travel_enquiries WHERE archived=0 AND status NOT IN ('Booked','Lost') AND follow_up IS NOT NULL AND follow_up<=? ORDER BY follow_up LIMIT 8", [today()]);
+    echo '<div class="work-head"><h3>' . icon('zap', 17) . ' Today</h3><span class="muted small">' . e(dfmt(today())) . '</span></div><div class="work-tiles">'
+        . '<a class="wtile act" href="travel.php?t=enquiries&amp;a=new"><span class="wt-ico">' . icon('user-plus', 24) . '</span><span class="wt-b"><span class="wt-l">Add new lead</span><small>Customer called, visited or sent a message</small></span><span class="wt-go">' . icon('arrow-right', 18) . '</span></a>'
+        . '<a class="wtile t-blue' . ($t['leads'] ? ' has' : '') . '" href="travel.php?t=enquiries"><span class="wt-ico">' . icon('phone', 24) . '</span><span class="wt-b"><b class="wt-n">' . $t['leads'] . '</b><span class="wt-l">Leads today</span><small>New enquiries received today</small></span><span class="wt-go">' . icon('arrow-right', 18) . '</span></a>'
+        . '<a class="wtile t-green' . ($t['booked'] ? ' has' : '') . '" href="travel.php?t=bookings"><span class="wt-ico">' . icon('check-circle', 24) . '</span><span class="wt-b"><b class="wt-n">' . $t['booked'] . '</b><span class="wt-l">Deals done today</span><small>' . money($t['sale']) . ' sold · margin ' . money($t['margin']) . '</small></span><span class="wt-go">' . icon('arrow-right', 18) . '</span></a>'
+        . '<a class="wtile t-amber' . ($due ? ' has' : '') . '" href="travel.php?t=enquiries&amp;status=Under+Discussion"><span class="wt-ico">' . icon('clock', 24) . '</span><span class="wt-b"><b class="wt-n">' . count($due) . '</b><span class="wt-l">Follow-ups due</span><small>Call these customers today</small></span><span class="wt-go">' . icon('arrow-right', 18) . '</span></a></div>';
+    echo '<form class="toolbar filters att-filter" method="get"><input type="hidden" name="t" value="dash"><label class="small">From <input type="date" name="from" value="' . e($from) . '"></label><label class="small">To <input type="date" name="to" value="' . e($to) . '"></label><button class="btn ghost sm">Show</button>'
+        . '<a class="btn ghost sm" href="' . e($base . '&a=export&from=' . $from . '&to=' . $to) . '">' . icon('download', 14) . ' Download Excel</a></form>';
+    echo '<div class="stats">' . stat_tile('Leads', $f['leads'], 'phone', 'brand') . stat_tile('Under discussion / open', $f['open'], 'chat', 'info') . stat_tile('Deals done', $f['booked'] . ' · ' . $f['conv'] . '%', 'check-circle', 'ok') . stat_tile('Lost', $f['lost'], 'x', 'bad')
+        . stat_tile('Sales', money($f['sale']), 'tag', 'brand') . stat_tile('Our cost', money($f['cost']), 'card', 'warn') . stat_tile('Margin', money($f['margin']) . ($f['sale'] ? ' · ' . round($f['margin'] / $f['sale'] * 100) . '%' : ''), 'award', 'ok') . stat_tile('Received', money($f['in']), 'dollar', 'gold') . '</div>';
+    echo '<div class="kv" style="margin:0 0 16px"><div class="bad"><span>Customers still owe (all open bookings)</span><b>' . money($owes) . '</b></div><div class="warn"><span>Still to pay suppliers</span><b>' . money($payable) . '</b></div><div><span>Paid to suppliers in period</span><b>' . money($f['out']) . '</b></div><div class="hl"><span>Cash margin in period</span><b>' . money($f['in'] - $f['out']) . '</b></div></div>';
+    $sv = []; foreach ($f['service'] as $k => $x) $sv[] = ['<b>' . e($k) . '</b>', (int)($x['leads'] ?? 0), (int)($x['booked'] ?? 0), money($x['sale'] ?? 0), money($x['cost'] ?? 0), '<b style="color:var(--ok)">' . money($x['margin'] ?? 0) . '</b>', ($x['sale'] ?? 0) ? round(($x['margin'] ?? 0) / $x['sale'] * 100) . '%' : '—'];
+    card_open(icon('layers', 17) . ' By service · ' . e(dfmt($from)) . ' – ' . e(dfmt($to)));
+    echo simple_table(['Service', 'Leads', 'Deals', 'Sales', 'Our cost', 'Margin', 'Margin %'], $sv, 'No leads or bookings in this period.');
+    card_close();
+    $dy = []; foreach (array_reverse($f['days'], true) as $d => $x) $dy[] = ['<b>' . e(dfmt($d)) . '</b>', (int)($x['leads'] ?? 0), (int)($x['booked'] ?? 0), money($x['sale'] ?? 0), money($x['cost'] ?? 0), '<b>' . money($x['margin'] ?? 0) . '</b>'];
+    echo '<div class="grid g2"><div class="card"><div class="card-h"><h3>' . icon('calendar', 17) . ' Day by day</h3></div>' . simple_table(['Date', 'Leads', 'Deals', 'Sales', 'Cost', 'Margin'], $dy, 'Nothing in this period.') . '</div>';
+    echo '<div class="card"><div class="card-h"><h3>' . icon('target', 17) . ' Lead stages</h3></div>' . chart_donut($f['stage']) . '<h4 style="margin:16px 0 6px">Top nationalities</h4>' . chart_bars(array_slice($f['nat'], 0, 6, true)) . '</div></div>';
+    card_open(icon('clock', 17) . ' Follow-ups due <span class="count">' . count($due) . '</span>');
+    echo simple_table(['Lead', 'Service', 'Stage', 'Follow-up', 'Phone'], array_map(function ($l) { return ['<b>' . e($l['name']) . '</b> <small class="ref">' . e($l['ref_no']) . '</small>', e($l['service']), badge($l['status']), '<span style="color:' . ($l['follow_up'] < today() ? 'var(--bad)' : 'var(--warn)') . ';font-weight:700">' . e(dfmt($l['follow_up'])) . '</span>', e($l['phone'])]; }, $due), 'No follow-ups due. Well done.', array_map(function ($l) { return ent_url('travel_enquiries', $l['id']); }, $due));
+    card_close();
+}
+mod('travel', ['label' => 'Travel & Tour', 'icon' => 'plane', 'area' => 'Travel & Services', 'order' => 1, 'desc' => 'Leads, packages, deals and bookings for air tickets, Umrah, visit visas, Dubai tours and holidays — with sales, costs, margin and daily reports.',
+    'tabs' => ['dash' => ['label' => 'Dashboard', 'icon' => 'bar-chart', 'post' => function ($base, $mod) {
+        if (g('a') !== 'export') return;
+        require_action($mod, 'export');
+        list($from, $to) = travel_period(); $data = [];
+        foreach (rows("SELECT * FROM travel_bookings WHERE archived=0 AND date(created_at) BETWEEN ? AND ? ORDER BY id", [$from, $to]) as $b) { $m = travel_money($b); $data[] = [$b['ref_no'], substr($b['created_at'], 0, 10), $b['customer'], $b['phone'], $b['nationality'], $b['service'], $b['destination'], $b['travel_date'], $b['pax'], $b['status'], $m['sale'], $m['cost'], $m['margin'], $m['in'], $m['out'], max(0, $m['owes']), user_name($b['handled_by'])]; }
+        $data[] = []; $data[] = ['LEADS'];
+        foreach (rows('SELECT * FROM travel_enquiries WHERE archived=0 AND date(created_at) BETWEEN ? AND ? ORDER BY id', [$from, $to]) as $l) $data[] = [$l['ref_no'], substr($l['created_at'], 0, 10), $l['name'], $l['phone'], $l['nationality'], $l['service'], $l['destination'], $l['travel_date'], $l['pax'], $l['status'], '', '', '', '', '', '', user_name($l['assigned_to'])];
+        csv_out('travel-' . $from . '-to-' . $to . '.csv', ['Number', 'Date', 'Customer', 'Phone', 'Nationality', 'Service', 'Destination', 'Travel date', 'Travellers', 'Status / stage', 'Sales', 'Our cost', 'Margin', 'Received', 'Paid out', 'Customer owes', 'Handled by'], $data, 'travel_bookings');
+    }, 'fn' => function ($base, $mod) { travel_dashboard($base); }],
+        'enquiries' => 'travel_enquiries', 'bookings' => 'travel_bookings', 'packages' => 'travel_packages', 'quotations' => 'travel_quotations', 'support' => 'travel_support']]);
 
 // ================================================================ Marriage Paybook
 ent('paybook_files', ['notify_new' => [null], 'label' => 'Paybook Files', 'one' => 'Paybook file', 'prefix' => 'PB', 'title' => 'client_name', 'title_ref' => true, 'icon' => 'heart', 'financial' => true,
@@ -399,11 +544,11 @@ seeder(function () {
     ins('support_tickets', $b + ['ref_no' => next_number('TKT'), 'subject' => 'Contact form not sending', 'it_project_id' => $itp, 'requester' => 'Ahmed', 'priority' => 'High', 'assigned_to' => $u('it'), 'status' => 'Open', 'details' => 'Form submits but no email arrives.']);
     ins('content_calendar', $b + ['title' => 'Hiring drive reel', 'platform' => 'Instagram', 'publish_date' => date('Y-m-d', strtotime('+2 days')), 'owner' => $u('marketing'), 'status' => 'Scheduled', 'business_line' => 'Marketing']);
 
-    $pk = ins('travel_packages', $b + ['ref_no' => next_number('PKG'), 'name' => 'Baku 4 nights', 'destination' => 'Baku, Azerbaijan', 'days' => 5, 'price' => 2450, 'cost' => 1900, 'inclusions' => 'Flights, 4* hotel, city tour, visa', 'status' => 'Active']);
-    ins('travel_packages', $b + ['ref_no' => next_number('PKG'), 'name' => 'Umrah economy', 'destination' => 'Makkah & Madinah', 'days' => 7, 'price' => 3200, 'cost' => 2700, 'status' => 'Active']);
-    $te = ins('travel_enquiries', $b + ['ref_no' => next_number('TEQ'), 'name' => 'Faisal Khan', 'phone' => '0567770001', 'package_id' => $pk, 'destination' => 'Baku', 'travel_date' => date('Y-m-d', strtotime('+30 days')), 'pax' => 2, 'source' => 'Instagram', 'status' => 'Booked', 'assigned_to' => $u('travel')]);
-    ins('travel_enquiries', $b + ['ref_no' => next_number('TEQ'), 'name' => 'Noura Saleh', 'phone' => '0567770002', 'destination' => 'Georgia', 'travel_date' => date('Y-m-d', strtotime('+45 days')), 'pax' => 4, 'source' => 'WhatsApp', 'status' => 'New', 'assigned_to' => $u('travel')]);
-    $tb = ins('travel_bookings', $b + ['ref_no' => next_number('TB'), 'customer' => 'Faisal Khan', 'phone' => '0567770001', 'package_id' => $pk, 'enquiry_id' => $te, 'travel_date' => date('Y-m-d', strtotime('+30 days')), 'pax' => 2, 'sale_price' => 4900, 'supplier' => 'Caspian DMC', 'supplier_cost' => 3800, 'status' => 'Confirmed']);
+    $pk = ins('travel_packages', $b + ['ref_no' => next_number('PKG'), 'name' => 'Baku 4 nights', 'service' => 'Holiday package', 'destination' => 'Baku, Azerbaijan', 'days' => 5, 'price' => 2450, 'cost' => 1900, 'inclusions' => 'Flights, 4* hotel, city tour, visa', 'status' => 'Active']);
+    ins('travel_packages', $b + ['ref_no' => next_number('PKG'), 'name' => 'Umrah economy', 'service' => 'Umrah package', 'destination' => 'Makkah & Madinah', 'days' => 7, 'price' => 3200, 'cost' => 2700, 'status' => 'Active']);
+    $te = ins('travel_enquiries', $b + ['ref_no' => next_number('TEQ'), 'name' => 'Faisal Khan', 'phone' => '0567770001', 'service' => 'Holiday package', 'nationality' => 'Pakistan', 'package_id' => $pk, 'destination' => 'Baku', 'travel_date' => date('Y-m-d', strtotime('+30 days')), 'pax' => 2, 'source' => 'Instagram', 'status' => 'Booked', 'assigned_to' => $u('travel')]);
+    ins('travel_enquiries', $b + ['ref_no' => next_number('TEQ'), 'name' => 'Noura Saleh', 'phone' => '0567770002', 'service' => 'Holiday package', 'status' => 'Under Discussion', 'follow_up' => today(), 'destination' => 'Georgia', 'travel_date' => date('Y-m-d', strtotime('+45 days')), 'pax' => 4, 'source' => 'WhatsApp', 'assigned_to' => $u('travel')]);
+    $tb = ins('travel_bookings', $b + ['ref_no' => next_number('TB'), 'customer' => 'Faisal Khan', 'phone' => '0567770001', 'service' => 'Holiday package', 'nationality' => 'Pakistan', 'package_id' => $pk, 'enquiry_id' => $te, 'travel_date' => date('Y-m-d', strtotime('+30 days')), 'pax' => 2, 'sale_price' => 4900, 'supplier' => 'Caspian DMC', 'supplier_cost' => 3800, 'status' => 'Confirmed']);
     record_payment('travel_bookings', $tb, 2500, ['method' => 'Card', 'pay_type' => 'Client Payment']);
     record_payment('travel_bookings', $tb, 1900, ['direction' => 'out', 'method' => 'Bank Transfer', 'pay_type' => 'Supplier Payment']);
 

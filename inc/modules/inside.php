@@ -804,6 +804,13 @@ function staff_work_panel()
         $t[] = $tile('Files done this month', (int)val("SELECT COUNT(*) FROM inside_files WHERE hr_owner=? AND created_at>=? AND archived=0", [$uid, date('Y-m-01')]), 'Your progress', 'award', 'green', 'inside.php');
         if (can('candidates', 'add')) $t[] = $tile('Add new candidate', null, 'Upload or scan the CV', 'user-plus', 'violet', 'candidates.php?t=all&a=new', true);
     }
+    if (!is_super() && can('travel') && !can('reception') && !can('candidates', 'approve')) {
+        $t[] = $tile('Add new lead', null, 'A customer called, visited or sent a message', 'user-plus', 'blue', 'travel.php?t=enquiries&a=new', true);
+        $t[] = $tile('Leads today', (int)val('SELECT COUNT(*) FROM travel_enquiries WHERE archived=0 AND date(created_at)=?', [today()]), 'New enquiries received today', 'phone', 'blue', 'travel.php?t=enquiries');
+        $t[] = $tile('Follow-ups due', (int)val("SELECT COUNT(*) FROM travel_enquiries WHERE archived=0 AND status NOT IN ('Booked','Lost') AND follow_up IS NOT NULL AND follow_up<=?", [today()]), 'Call these customers today', 'clock', 'amber', 'travel.php');
+        $t[] = $tile('Under discussion', (int)val("SELECT COUNT(*) FROM travel_enquiries WHERE archived=0 AND status IN ('Contacted','Under Discussion','Quoted')"), 'Open leads to close', 'chat', 'violet', 'travel.php?t=enquiries&status=Under+Discussion');
+        $t[] = $tile('Deals this month', (int)val("SELECT COUNT(*) FROM travel_bookings WHERE archived=0 AND status<>'Cancelled' AND created_at>=?", [date('Y-m-01')]), 'Open the travel dashboard for sales and margin', 'award', 'green', 'travel.php');
+    }
     if (!is_super() && can('deployment')) {
         list($w, $p) = function_exists('chat_scope') ? chat_scope(true) : ['1=0', []];
         $t[] = $tile('My candidates', (int)val("SELECT COUNT(*) FROM candidates c WHERE c.archived=0 AND c.stage IN ('In Deployment','Selected') AND $w", $p), 'Chat, send interview locations, record the result', 'users', 'blue', 'deployment.php');

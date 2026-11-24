@@ -640,7 +640,7 @@ function chart_donut(array $data)
 function stat_tile($label, $value, $iconName, $tone = 'brand', $href = null)
 {
     $t = ['ok' => 'green', 'bad' => 'red', 'warn' => 'amber', 'brand' => 'blue', 'info' => 'violet', 'gold' => 'gold'][$tone] ?? 'blue';
-    return '<' . ($href ? 'a href="' . e($href) . '"' : 'div') . ' class="stat t-' . $t . '"><span class="stat-i">' . icon($iconName, 20) . '</span><span class="stat-v">' . e((string)$value) . '</span><span class="stat-l">' . e($label) . '</span></' . ($href ? 'a' : 'div') . '>';
+    return '<' . ($href ? 'a href="' . e($href) . '"' : 'div') . ' class="stat t-' . $t . '"><span class="stat-i">' . icon($iconName, 20) . '</span><span class="stat-v' . (mb_strlen((string)$value) > 9 ? ' long' : '') . '">' . e((string)$value) . '</span><span class="stat-l">' . e($label) . '</span></' . ($href ? 'a' : 'div') . '>';
 }
 function progress($pct, $label = '')
 {

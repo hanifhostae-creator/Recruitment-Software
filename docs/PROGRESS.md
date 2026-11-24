@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.10.1 (22 Nov 2026)
+## Current version: 1.11.0 (24 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -193,6 +193,20 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   checking out, the new check-in replaces today's times), "Reset today" per person and "Reset everyone today" (work even when
   testing mode is off), reset history. Every reset is audited (`attendance-reset`, old times kept). Switch testing mode off when done.
 
+- **v1.11** (24 Nov): **Travel & Tour portal** (business.php, travel section):
+  - Services list (Admin options `travel_services`): air ticket, Umrah, Hajj, UAE visit visa, visa change, inside Dubai tour, desert safari,
+    city tour, holiday package, hotel, airport transfer, insurance. Lost reasons list `travel_lost_reasons`.
+  - **Leads** (`travel_enquiries`): customer, phone, WhatsApp, nationality, service, package, purpose, destination, dates, travellers,
+    budget, source, stage New → Contacted → Under Discussion → Quoted → Booked / Lost, next follow-up, handled by. Actions: Update stage
+    (with note), **Deal done — create booking** (price, supplier cost, live margin, payment received now), Mark lost (reason).
+    Quotation saved → lead becomes Quoted.
+  - **Bookings**: service, nationality, PNR/reference, flight/hotel details, sale price, supplier cost, **other costs**; margin =
+    sale − supplier − other; customer payments (in) and supplier/expense payments (out) through `record_payment` (section Travel & Tour).
+  - **Dashboard**: Today tiles (add lead, leads today, deals today with sales/margin, follow-ups due), period filter, leads / open /
+    deals + conversion / lost, sales, cost, margin, received, customers owe, supplier payable, cash margin, **by service** table,
+    **day by day**, lead stages, top nationalities, follow-ups list, **Excel export** (bookings + leads).
+  - Travel Team home has its own "Your work today" tiles. Long money values in stat boxes use a smaller font.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -202,6 +216,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-24 · v1.11.0 · Travel & Tour: leads pipeline, deal-to-booking, costs and margin, daily/service reports, Excel.
 - 2026-11-22 · v1.10.1 · Attendance testing mode and admin reset of today's check-in.
 - 2026-11-22 · v1.10.0 · Check-in greeting with name + repeat, spoken work confirmations, Super Admin glance tiles, smooth stat boxes.
 - 2026-11-22 · v1.9.0 · Check-in/out sounds, Staff Attendance reports + Excel, fill the form from the CV (upload/camera, PDF scans), online registration link, staff work tiles.

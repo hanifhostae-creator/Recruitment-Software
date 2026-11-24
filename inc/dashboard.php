@@ -293,7 +293,7 @@ function dash_render($sec)
     echo '<div class="stats" data-live-src="index.php?s=' . e($sec) . '&live=1">';
     $i = 0;
     foreach (dash_tiles($sec) as $k => $t) {
-        echo '<a class="stat t-' . e($t[4]) . '" data-k="' . e($k) . '" style="--d:' . ($i++ * 45) . 'ms" href="' . e($t[5]) . '"><span class="stat-i">' . icon($t[3], 20) . '</span><span class="stat-v" data-count="' . e(is_numeric($t[1]) && in_array($t[2], ['num', 'money'], true) ? $t[1] : '') . '"' . ($t[2] === 'money' ? ' data-prefix="' . e(setting('currency', 'AED')) . ' " data-dec="2"' : '') . '">' . e(dash_fmt($t[1], $t[2])) . '</span><span class="stat-l">' . e($t[0]) . '</span></a>';
+        echo '<a class="stat t-' . e($t[4]) . '" data-k="' . e($k) . '" style="--d:' . ($i++ * 45) . 'ms" href="' . e($t[5]) . '"><span class="stat-i">' . icon($t[3], 20) . '</span><span class="stat-v' . (mb_strlen(dash_fmt($t[1], $t[2])) > 9 ? ' long' : '') . '" data-count="' . e(is_numeric($t[1]) && in_array($t[2], ['num', 'money'], true) ? $t[1] : '') . '"' . ($t[2] === 'money' ? ' data-prefix="' . e(setting('currency', 'AED')) . ' " data-dec="2"' : '') . '">' . e(dash_fmt($t[1], $t[2])) . '</span><span class="stat-l">' . e($t[0]) . '</span></a>';
     }
     echo '</div>';
     $m = date('Y-m-01');

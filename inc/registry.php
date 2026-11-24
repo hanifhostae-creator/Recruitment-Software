@@ -88,7 +88,7 @@ function render_widgets(array $only = null)
     foreach ($GLOBALS['WIDGETS'] as $w) {
         if (!can($w['mod']) || ($only !== null && !in_array($w['mod'], $only, true))) continue;
         $v = ($w['fn'])();
-        echo '<a class="stat t-' . e($w['tone']) . '" style="--d:' . ($i++ * 40) . 'ms" href="' . e($w['link'] ?: ($GLOBALS['MODS'][$w['mod']]['page'] ?? '#')) . '"><span class="stat-i">' . icon($w['icon'], 20) . '</span><span class="stat-v" data-count="' . e(is_numeric($v) ? $v : '') . '">' . e(is_numeric($v) ? num($v) : $v) . '</span><span class="stat-l">' . e($w['label']) . '</span></a>';
+        echo '<a class="stat t-' . e($w['tone']) . '" style="--d:' . ($i++ * 40) . 'ms" href="' . e($w['link'] ?: ($GLOBALS['MODS'][$w['mod']]['page'] ?? '#')) . '"><span class="stat-i">' . icon($w['icon'], 20) . '</span><span class="stat-v' . (mb_strlen(is_numeric($v) ? num($v) : (string)$v) > 9 ? ' long' : '') . '" data-count="' . e(is_numeric($v) ? $v : '') . '">' . e(is_numeric($v) ? num($v) : $v) . '</span><span class="stat-l">' . e($w['label']) . '</span></a>';
     }
     echo '</div>';
 }

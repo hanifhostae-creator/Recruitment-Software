@@ -718,3 +718,6 @@ input.autofilled, select.autofilled, textarea.autofilled { background: color-mix
 .stat:hover .stat-i { animation: floaty 1.6s ease-in-out infinite; }
 .wtile small .money, .wt-l + small { word-break: break-word; }
 .wt-n.sm { font-size: 21px; }
+.stats { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.stat-v { min-width: 0; overflow-wrap: anywhere; } .stat-v.long { font-size: 18px; line-height: 1.2; }
+.stat > span:not(.stat-i) { min-width: 0; }
