@@ -4,9 +4,9 @@
 const ACTIONS = ['add' => 'Add', 'edit' => 'Edit', 'delete' => 'Delete / archive', 'approve' => 'Approve / decide', 'assign' => 'Assign / deploy',
     'export' => 'Export', 'finance' => 'Finance posting', 'config' => 'Configuration'];
 /** Screens every staff user may open. */
-const PERSONAL_MODULES = ['dashboard', 'mydash', 'search', 'tasks', 'notifications', 'messenger', 'calendar', 'selfservice', 'chat'];
+const PERSONAL_MODULES = ['news', 'dashboard', 'mydash', 'search', 'tasks', 'notifications', 'messenger', 'calendar', 'selfservice', 'chat'];
 /** Screens only the Super Admin role may open. */
-const SUPER_ONLY = ['admin', 'audit', 'settings', 'staff'];
+const SUPER_ONLY = ['office', 'admin', 'audit', 'settings', 'staff'];
 
 /** Logged-in staff user (with role, modules, actions) or null. */
 function me()

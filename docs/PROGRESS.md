@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.12.0 (25 Nov 2026)
+## Current version: 1.13.0 (25 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -220,6 +220,19 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   - **Progress**: per team, per person for a month: reports, typed totals and automatic totals.
   - Roles Travel Team, Marketing, Outside Operations get the module (upgrade_v21). Home tile "Submit today's report".
 
+- **v1.13** (25 Nov): **Call & Announce** (`office.php`, `news.php`, `inc/modules/announce.php`; console is Super Admin only):
+  - **Call to office**: staff cards (role, in office / not checked in) → one click calls; optional message. The staff screen shows a
+    full-screen alert (ringing bell) and the recorded voice says "<name>, please come to the office. The management is calling you."
+    (staff name from `assets/voice/names/`), repeated every 20 s up to 4 times until "I'm coming". The Super Admin then hears
+    "<name> is on the way to your office". Recent calls with status (Waiting / Coming / Closed). Table `office_calls`.
+  - **Announcements**: type (Announcement, News, Task, Holiday, Urgent), title, message, to all staff / a team / chosen staff,
+    optional "show until Got it". Staff get a full-screen announcement with voice; Announcements page for everyone (menu, Home);
+    the Super Admin sees "x / y read" and who read it. Tables `announcements`, `announcement_reads`.
+  - Pending calls/announcements also pop up when the person opens any page (`big_alerts()`); alerts show one after another,
+    calls first. New alert types `call`, `announce` in Notification sounds.
+  - **Check-in lock**: outside the office network staff see only a locked (disabled) Check in / Check out button — no text about
+    the office Wi-Fi; a forced attempt answers "Check-in and check-out are locked at the moment."
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -229,6 +242,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-25 · v1.13.0 · Call to office with spoken name, announcements to staff with read receipts, plain lock for check-in outside the office.
 - 2026-11-25 · v1.12.0 · Daily reports for Travel, Marketing and Outside Hiring with automatic numbers, team view, progress and Excel.
 - 2026-11-24 · v1.11.0 · Travel & Tour: leads pipeline, deal-to-booking, costs and margin, daily/service reports, Excel.
 - 2026-11-22 · v1.10.1 · Attendance testing mode and admin reset of today's check-in.

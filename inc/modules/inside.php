@@ -906,7 +906,7 @@ mod('reception', ['label' => 'Reception', 'icon' => 'home', 'area' => 'Inside Hi
         foreach (attendance_users() as $s) {
             $a = attendance_today($s['id']);
             $btn = '';
-            if (can('reception', 'edit') && !att_allowed()) $btn = '<span class="muted small">' . icon('lock', 13) . ' Office Wi-Fi only</span>';
+            if (can('reception', 'edit') && !att_allowed()) $btn = '<span class="muted" title="Locked">' . icon('lock', 15) . '</span>';
             elseif (can('reception', 'edit')) {
                 $btn = '<form method="post" class="inline-form">' . csrf_field() . '<input type="hidden" name="att_user" value="' . $s['id'] . '">';
                 if (!$a) $btn .= '<button class="btn sm" name="_att" value="in">Check in</button>';

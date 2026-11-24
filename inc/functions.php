@@ -206,6 +206,7 @@ const NOTIF_KINDS = [
     'deploy' => ['Candidate sent to my deployment team', 'bell', 'send'], 'chat' => ['New chat message', 'pop', 'chat'],
     'lead' => ['New enquiry, lead or WhatsApp message', 'soft', 'target'], 'approval' => ['Approval needed', 'alert', 'check-circle'],
     'payment' => ['Payment received', 'cash', 'dollar'], 'task' => ['Task, issue or ticket', 'alert', 'alert'],
+    'call' => ['Called to the office', 'alert', 'bell'], 'announce' => ['Announcement from the management', 'chime', 'megaphone'],
     'entry' => ['New entry anywhere (Super Admin)', 'soft', 'activity'], 'system' => ['Other notifications', 'soft', 'bell']];
 const NOTIF_SOUNDS = ['chime' => 'Chime', 'bell' => 'Bell', 'ding' => 'Ding', 'pop' => 'Pop', 'soft' => 'Soft', 'alert' => 'Alert', 'cash' => 'Cash register', 'none' => 'Silent'];
 function notif_config()
@@ -215,7 +216,7 @@ function notif_config()
     $saved = json_decode((string)setting('notif_config', ''), true) ?: [];
     $c = [];
     foreach (NOTIF_KINDS as $k => $d) $c[$k] = ['on' => (bool)($saved[$k]['on'] ?? true), 'sound' => $saved[$k]['sound'] ?? $d[1], 'icon' => $saved[$k]['icon'] ?? $d[2], 'label' => $d[0],
-        'voice' => (bool)($saved[$k]['voice'] ?? in_array($k, ['assigned', 'file', 'deploy', 'chat', 'lead', 'payment'], true))];
+        'voice' => (bool)($saved[$k]['voice'] ?? in_array($k, ['assigned', 'file', 'deploy', 'chat', 'lead', 'payment', 'call', 'announce'], true))];
     return $c;
 }
 /** Spoken / written alert messages. The Super Admin edits the wording in Admin → Notification sounds. [who/when, alert type, default text] */
@@ -519,7 +520,7 @@ function att_allowed($uid = null)
     if (in_array((int)($uid ?? (me()['id'] ?? 0)), office_anywhere_users(), true)) return true;
     return office_network_name() !== null;
 }
-const ATT_LOCK_MSG = 'Check-in and check-out work only on the office Wi-Fi. Please connect to the office network and try again.';
+const ATT_LOCK_MSG = 'Check-in and check-out are locked at the moment.';
 /** Handles the check-in box and the Reception manual box (posted with _att). */
 function attendance_handle()
 {

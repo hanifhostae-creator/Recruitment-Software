@@ -423,6 +423,43 @@
         else if (!d.repeat) setTimeout(go, d.ok ? 1800 : 3200);
       }).catch(function () { f.submit(); });
   });
+  // big alert: called to the office / announcement to confirm — stays until answered
+  var bigShown = {};
+  function bigAck(b, done) {
+    var fd = new FormData(); fd.append('_csrf', b.csrf); fd.append('ack', '1'); fd.append('type', b.type); fd.append('id', b.id);
+    fetch('news.php?t=list', { method: 'POST', body: fd, credentials: 'same-origin' }).then(function () { if (done) done(); }).catch(function () { if (done) done(); });
+  }
+  var bigQueue = [], bigOpen = false;
+  function bigAlert(b) {
+    var key = b.type + b.id; if (bigShown[key]) return; bigShown[key] = 1;
+    if (b.type === 'call') bigQueue.unshift(b); else bigQueue.push(b);
+    if (!bigOpen) bigNext();
+  }
+  function bigNext() {
+    var b = bigQueue.shift(); if (!b) { bigOpen = false; return; } bigOpen = true;
+    var el = document.createElement('div'); el.className = 'big-alert ' + (b.type === 'call' ? 'is-call' : 'is-ann');
+    el.innerHTML = '<div class="ba-card" role="alertdialog" aria-live="assertive"><div class="ba-ring"><span>' + (b.type === 'call' ? '&#128276;' : '&#128227;') + '</span></div><small class="ba-k"></small><h2></h2><p class="ba-text"></p>'
+      + '<div class="ba-btns"><button type="button" class="btn ghost" data-ba-rep>&#8635; Repeat</button><button type="button" class="btn big" data-ba-ok></button></div></div>';
+    el.querySelector('.ba-k').textContent = b.type === 'call' ? 'Called to the office' : (b.kind || 'Announcement') + (b.from ? ' · ' + b.from : '') + (b.at ? ' · ' + b.at : '');
+    el.querySelector('h2').textContent = b.title; el.querySelector('.ba-text').textContent = b.text || '';
+    el.querySelector('[data-ba-ok]').textContent = b.type === 'call' ? "I'm coming" : 'Got it';
+    document.body.appendChild(el);
+    var timer = null;
+    function ring() { beep(true, b.type === 'call' ? 'alert' : 'chime'); setTimeout(function () { playSeq(b.seq, b.say); }, 800); }
+    ring();
+    if (b.type === 'call') { var n = 0; timer = setInterval(function () { if (++n > 4 || !el.parentNode) { clearInterval(timer); return; } ring(); }, 20000); }
+    el.querySelector('[data-ba-rep]').addEventListener('click', ring);
+    el.querySelector('[data-ba-ok]').addEventListener('click', function () { if (timer) clearInterval(timer); if (window.speechSynthesis) window.speechSynthesis.cancel(); var p = getPlayer(); try { p.pause(); } catch (e) {} el.classList.add('out'); bigAck(b, function () { setTimeout(function () { el.remove(); bigNext(); }, 250); }); });
+  }
+  var bigOnLoad = document.querySelector('[data-big-alerts]');
+  if (bigOnLoad) { try { JSON.parse(bigOnLoad.getAttribute('data-big-alerts')).forEach(function (b, i) { setTimeout(function () { bigAlert(b); }, 400 + i * 300); }); } catch (e) {} }
+  document.querySelectorAll('[data-ack-ann]').forEach(function (btn) {
+    btn.addEventListener('click', function () { bigAck({ type: 'ann', id: btn.getAttribute('data-ack-ann'), csrf: btn.getAttribute('data-csrf') }, function () { btn.outerHTML = '<span class="badge b-ok">Read</span>'; }); });
+  });
+  document.querySelectorAll('.seg-aud input[name=aud]').forEach(function (r) {
+    function sync() { var v = (document.querySelector('.seg-aud input[name=aud]:checked') || {}).value; document.querySelectorAll('[data-aud]').forEach(function (x) { x.hidden = x.getAttribute('data-aud') !== v; }); }
+    r.addEventListener('change', sync); sync();
+  });
   // a confirmation spoken when a page opens after saving (for example "The candidate record has been saved")
   var sayNow = document.querySelector('[data-say-now]');
   if (sayNow) {
@@ -541,9 +578,10 @@
       document.querySelectorAll('[data-chat-badge]').forEach(function (b) { var n = d.chat !== undefined ? d.chat : d.count; b.textContent = n; if (n > 0) b.removeAttribute('hidden'); else b.setAttribute('hidden', ''); });
       document.title = (d.count + (d.chat || 0) > 0 ? '(' + (d.count + (d.chat || 0)) + ') ' : '') + baseTitle;
       if (d.items && d.items.length) {
-        var loud = d.items.filter(function (it) { return !it.quiet; });
-        if (loud.length) { beep(false, loud[0].sound); if (loud[0].say || loud[0].clip) setTimeout(function () { announce(loud[0].clip, loud[0].say, loud[0].full); }, 900); }
-        d.items.forEach(function (it) { if (!it.quiet) toast(it.text, it.link, it.label, it.icon, it); if (it.id > since) since = it.id; });
+        d.items.forEach(function (it) { if (it.big) bigAlert(it.big); });
+        var loud = d.items.filter(function (it) { return !it.quiet && !it.big; });
+        if (loud.length) { beep(false, loud[0].sound); if (loud[0].seq) setTimeout(function () { playSeq(loud[0].seq, loud[0].full); }, 900); else if (loud[0].say || loud[0].clip) setTimeout(function () { announce(loud[0].clip, loud[0].say, loud[0].full); }, 900); }
+        d.items.forEach(function (it) { if (!it.quiet && !it.big) toast(it.text, it.link, it.label, it.icon, it); if (it.id > since) since = it.id; });
         if (window.rhLiveRefresh) window.rhLiveRefresh();
         loadPop(); if (nBtn) { nBtn.classList.remove('ring'); void nBtn.offsetWidth; nBtn.classList.add('ring'); }
       }

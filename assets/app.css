@@ -728,3 +728,25 @@ input.autofilled, select.autofilled, textarea.autofilled { background: color-mix
 .dr-list { display: grid; gap: 12px; } .dr-item p { margin: 8px 0 0; } .dr-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .dr-chips { margin-top: 10px; } .dr-chips .chip { font-size: 12px; } .chip.auto { background: var(--ok-50); color: var(--ok); border-color: transparent; }
 .dr-chips .chip b { margin-right: 4px; }
+/* call to office + announcements */
+.call-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.call-card { display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; text-align: left; font: inherit; color: var(--body); box-shadow: var(--shadow-3d); transition: transform .2s, box-shadow .2s, border-color .2s; }
+.call-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-3d-hover); border-color: var(--brand-100); } .call-card:active { transform: scale(.98); }
+.call-card .avatar { width: 44px; height: 44px; font-size: 18px; flex: none; } .cc-t { flex: 1; min-width: 0; display: flex; flex-direction: column; } .cc-t b { color: var(--ink); } .cc-t small { color: var(--muted); font-size: 12px; }
+.cc-in i, .cc-out i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; background: var(--muted); } .cc-in { color: var(--ok) !important; font-weight: 600; } .cc-in i { background: #22c08a; box-shadow: 0 0 0 3px var(--ok-50); }
+.cc-go { flex: none; display: inline-flex; gap: 6px; align-items: center; padding: 8px 12px; border-radius: 12px; color: #fff; background: linear-gradient(135deg, #f0a43a, #e0445f); font-weight: 700; font-size: 13px; box-shadow: 0 10px 18px -10px rgba(224,68,95,.9); }
+.big-alert { position: fixed; inset: 0; z-index: 250; display: grid; place-items: center; background: rgba(7,13,31,.62); backdrop-filter: blur(4px); animation: fadeIn .2s ease both; padding: 16px; }
+.big-alert.out { opacity: 0; transition: opacity .25s; }
+.ba-card { width: min(440px, 100%); background: var(--surface); border-radius: 26px; padding: 30px 26px 24px; text-align: center; box-shadow: var(--shadow-lg); animation: popIn .35s cubic-bezier(.2,.8,.2,1.2) both; }
+.ba-ring { width: 92px; height: 92px; margin: 0 auto 12px; border-radius: 50%; display: grid; place-items: center; font-size: 42px; background: linear-gradient(135deg, #f0a43a, #e0445f); box-shadow: 0 0 0 0 rgba(224,68,95,.55); animation: baPulse 1.4s infinite; }
+.is-ann .ba-ring { background: var(--grad-brand); box-shadow: 0 0 0 0 rgba(61,107,255,.5); }
+.ba-ring span { animation: ring 1.2s ease infinite; display: inline-block; }
+@keyframes baPulse { 70% { box-shadow: 0 0 0 22px rgba(224,68,95,0); } 100% { box-shadow: 0 0 0 0 rgba(224,68,95,0); } }
+.ba-k { display: block; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; font-size: 11.5px; color: var(--muted); } .ba-card h2 { margin: 6px 0 8px; font-size: 24px; } .ba-text { color: var(--body); white-space: pre-line; }
+.ba-btns { display: flex; gap: 10px; justify-content: center; margin-top: 18px; flex-wrap: wrap; }
+.ann-row { border-bottom: 1px solid var(--line-2); padding: 10px 0; } .ann-row summary { display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; } .ann-row summary::-webkit-details-marker { display: none; }
+.ann-ico { flex: none; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--tone), color-mix(in srgb, var(--tone) 60%, #7c4dff)); }
+.ann-t { flex: 1; min-width: 0; } .ann-t b { display: block; color: var(--ink); } .ann-t small { color: var(--muted); font-size: 12px; } .ann-row p { margin: 8px 0 0 48px; }
+.ann-head { display: flex; align-items: center; gap: 12px; } .ann-head > div { flex: 1; min-width: 0; } .ann-head b { display: block; color: var(--ink); font-size: 15px; } .ann-head small { color: var(--muted); font-size: 12px; } .ann-card p { margin: 10px 0 0; } .ann-card.hl { border-color: var(--brand) !important; }
+.seg-aud { max-width: 460px; }
+.att-locked { opacity: .55; }

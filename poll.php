@@ -11,15 +11,20 @@ if (me()) {
     $out['count'] = (int)val('SELECT COUNT(*) FROM notifications WHERE user_id=? AND is_read=0', [$uid]);
     $cfg = notif_config();
     $tailOn = setting('voice_tail', '1') === '1';
-    foreach (rows('SELECT id, kind, text, msg_key, say_tail FROM notifications WHERE user_id=? AND id>? ORDER BY id LIMIT 5', [$uid, $since]) as $n) {
+    foreach (rows('SELECT id, kind, text, link, msg_key, say_tail FROM notifications WHERE user_id=? AND id>? ORDER BY id LIMIT 5', [$uid, $since]) as $n) {
         $c = $cfg[$n['kind']] ?? $cfg['system'];
         $full = trim(preg_replace('/\s*\([^)]*\)/', '', $n['text']));
         $clip = $c['on'] && $c['voice'] ? voice_clip($n['msg_key']) : '';
         $tail = (string)$n['say_tail'];
         // alerts without their own recording: the recorded voice says "You have a new notification", then the text is read
         if (!$clip && !$n['msg_key'] && $c['on'] && $c['voice'] && ($clip = voice_clip('general'))) $tail = $full;
-        $out['items'][] = ['id' => (int)$n['id'], 'text' => $n['text'], 'link' => 'notifications.php?open=' . $n['id'], 'label' => $c['label'], 'sound' => $c['on'] ? $c['sound'] : 'none', 'quiet' => !$c['on'], 'icon' => icon($c['icon'], 18),
+        $item = ['id' => (int)$n['id'], 'text' => $n['text'], 'link' => 'notifications.php?open=' . $n['id'], 'label' => $c['label'], 'sound' => $c['on'] ? $c['sound'] : 'none', 'quiet' => !$c['on'], 'icon' => icon($c['icon'], 18),
             'say' => $c['on'] && $c['voice'] ? ($clip ? ($tailOn ? $tail : '') : $full) : '', 'clip' => $clip, 'full' => $full];
+        // office calls and announcements: a big alert on the screen with the spoken name / title
+        if (function_exists('big_call_item') && preg_match('/^news\.php\?call=(\d+)$/', (string)$n['link'], $mm) && ($oc = row('SELECT * FROM office_calls WHERE id=?', [$mm[1]])) && $oc['status'] === 'Waiting') $item['big'] = big_call_item($oc);
+        elseif (function_exists('big_ann_item') && preg_match('/^news\.php\?a=(\d+)$/', (string)$n['link'], $mm) && ($an = row('SELECT * FROM announcements WHERE id=?', [$mm[1]]))) { if ($an['need_ack']) $item['big'] = big_ann_item($an); else { $item['seq'] = [vclip('announce_new'), ['s' => $an['title']]]; } }
+        elseif ($n['kind'] === 'call' && preg_match('/^(.+) is on the way to your office\.$/', (string)$n['text'], $mm)) $item['seq'] = [vname($mm[1]), vclip('call_coming')];
+        $out['items'][] = $item;
     }
     $out['chat'] = chat_unread_total();
 } elseif (!empty($_SESSION['portal']) && $_SESSION['portal']['type'] === 'candidate') {
