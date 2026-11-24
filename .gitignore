@@ -7,3 +7,15 @@ uploads/*
 
 # server configuration (database password, secret key)
 inc/config.php
+
+# never commit secrets, databases, logs or backups
+.env
+.env.*
+*.sqlite
+*.sqlite3
+*.db
+*.sql
+*.log
+*.bak
+*.zip
+backups/
