@@ -2,7 +2,7 @@
 
 Read this first in every new session. Update it at the end of every piece of work.
 
-## Current version: 1.13.0 (25 Nov 2026)
+## Current version: 1.13.1 (25 Nov 2026)
 
 ### First message to paste in a new session
 > Read CLAUDE.md and docs/PROGRESS.md fully, then continue the work. Talk to me in Roman Urdu.
@@ -233,6 +233,11 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
   - **Check-in lock**: outside the office network staff see only a locked (disabled) Check in / Check out button — no text about
     the office Wi-Fi; a forced attempt answers "Check-in and check-out are locked at the moment."
 
+- **v1.13.1** (25 Nov): office Wi-Fi fix — with IPv6 every device has its own address, so a saved single IPv6 address now
+  stands for its /64 network (`ip_office_rule()`; "Add this network" saves the /64). Staff who see the lock are logged once per
+  address (`attendance-locked`); Admin → Office network → "Could not check in" lists them with **Allow this network**.
+  Warning on that page when the site seems to be behind a CDN/proxy.
+
 ### Not done yet / ideas for next sessions
 - Per-user permission overrides (today: roles; duplicate a role per person if needed).
 - Two-factor login (spec says not included; can be added later).
@@ -242,6 +247,7 @@ Everything below is built, on `main`, and tested on **SQLite and MySQL (MariaDB 
 - Demo-data cleanup tool (live installs start empty, so only needed for old demo databases).
 
 ## Change log
+- 2026-11-25 · v1.13.1 · Office network: IPv6 devices on the same Wi-Fi allowed, one-click allow from 'Could not check in', CDN warning.
 - 2026-11-25 · v1.13.0 · Call to office with spoken name, announcements to staff with read receipts, plain lock for check-in outside the office.
 - 2026-11-25 · v1.12.0 · Daily reports for Travel, Marketing and Outside Hiring with automatic numbers, team view, progress and Excel.
 - 2026-11-24 · v1.11.0 · Travel & Tour: leads pipeline, deal-to-booking, costs and margin, daily/service reports, Excel.

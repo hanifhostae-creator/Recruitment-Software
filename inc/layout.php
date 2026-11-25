@@ -131,6 +131,7 @@ function page_start($title, $active = null, $showFlash = true)
         if (!is_super()) {
         echo '<form method="post" class="att-mini">' . csrf_field();
         $okNet = att_allowed();
+        if (!$okNet && (!$att || !$att['check_out']) && empty($_SESSION['att_lock_seen'][client_ip()])) { $_SESSION['att_lock_seen'][client_ip()] = 1; audit('attendance-locked', 'staff_attendance', $u['id'], null, ['ip' => client_ip()]); }
         if (!$okNet && (!$att || !$att['check_out'])) echo '<button class="btn sm att-locked" type="button" disabled title="Locked">' . icon('lock', 15) . '<span> ' . (!$att ? 'Check in' : 'Check out') . '</span></button>';
         elseif (!$att) echo '<button class="btn sm" name="_att" value="in">' . icon('login', 15) . '<span> Check in</span></button>';
         elseif (!$att['check_out']) echo '<span class="att-on" title="Checked in at ' . e(substr($att['check_in'], 11, 5)) . '"><i></i>' . e(substr($att['check_in'], 11, 5)) . '</span><button class="btn ghost sm" name="_att" value="out">' . icon('logout', 15) . '<span> Check out</span></button>';

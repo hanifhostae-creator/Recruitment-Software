@@ -493,7 +493,8 @@ function ip_match($ip, $rule)
     $rule = trim($rule);
     $a = @inet_pton(ip_norm($ip));
     if ($a === false || $rule === '' || !ip_rule_valid($rule)) return false;
-    if (strpos($rule, '/') === false) return $a === @inet_pton($rule);
+    // a single IPv6 address stands for its whole office network (/64): every device on the same Wi-Fi gets its own address
+    if (strpos($rule, '/') === false) { if (strpos($rule, ':') === false) return $a === @inet_pton($rule); $rule = ip_office_rule($rule); }
     list($net, $bits) = explode('/', $rule, 2);
     $b = @inet_pton($net);
     if ($b === false || strlen($a) !== strlen($b)) return false;
@@ -502,6 +503,14 @@ function ip_match($ip, $rule)
     if (!$rem) return true;
     $m = (0xFF << (8 - $rem)) & 0xFF;
     return (ord($a[$full]) & $m) === (ord($b[$full]) & $m);
+}
+/** The rule saved for an address: IPv4 as it is, IPv6 as its /64 network (shared by all devices on the same Wi-Fi). */
+function ip_office_rule($ip)
+{
+    $ip = ip_norm(trim($ip));
+    if (strpos($ip, '/') !== false || strpos($ip, ':') === false) return $ip;
+    $b = @inet_pton($ip); if ($b === false || strlen($b) !== 16) return $ip;
+    return inet_ntop(substr($b, 0, 8) . str_repeat("\0", 8)) . '/64';
 }
 function office_networks() { return json_decode((string)setting('office_networks', ''), true) ?: []; }
 function office_lock_on() { return setting('office_lock', '0') === '1' && office_networks(); }
